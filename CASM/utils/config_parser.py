@@ -1,4 +1,5 @@
 """YAML parser for configuration object"""
+from functools import partial
 from pathlib import Path
 from typing import Callable, Union
 
@@ -38,6 +39,18 @@ def function_constructor(
     :param loader: A mapping node if function parameters given, scalar node if not
     :param type: Union[yaml.nodes.MappingNode, yaml.nodes.ScalarNode]
     """
+    arg_map = None
+    if isinstance(node, yaml.nodes.MappingNode):
+        arg_map = (
+            loader.construct_mapping(node, deep=True) if node.value else {}
+        )
+        node = yaml.nodes.ScalarNode(
+            node.tag, "", node.start_mark, node.end_mark
+        )
+    func = loader.construct_python_name(tag_suffix, node)
+    if arg_map:
+        func = partial(func, **arg_map)
+    return func
 
 def get_loader() -> yaml.Loader:
     """Add constructors to PyYAML loader."""
@@ -59,5 +72,4 @@ def parse_config(path: Path) -> BaseModel:
 
     with open(path, "rb") as f:
         yml_config = yaml.load(f, Loader=get_loader())
-    return 
-    yml_config
+    return yml_config
