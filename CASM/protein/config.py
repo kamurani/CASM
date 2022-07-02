@@ -12,4 +12,4 @@ from pydantic import BaseModel
 class ClusterConfig(BaseModel):
 
     unsupervised: bool = True
-    node_embedding: Optional[List[Union[Callable, str]]] = "meiler"
+    node_embedding: Optional[List[Union[Callable, str]]] = ["meiler"]
