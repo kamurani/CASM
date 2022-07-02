@@ -1,16 +1,16 @@
 """Command line interface for CASM."""
 
 import pathlib
-import click
+import click as c
 
 from CASM.utils.config_parser import parse_config
 
-@click.command
-@click.option(
+@c.command
+@c.option(
     "-c",
     "--config-path",
     help="The path to the `.yml` config file",
-    type=click.Path(
+    type=c.Path(
         exists=True, file_okay=True, dir_okay=False, path_type=pathlib.Path
     ),
 )
@@ -18,8 +18,9 @@ from CASM.utils.config_parser import parse_config
 def main(config_path):
     """Run job"""
     config = parse_config(path=config_path) if config_path else None 
-    click.echo("Running...")
-    print(config)
+    c.echo("Running...")
+    c.echo(config)
+
 
 
 
