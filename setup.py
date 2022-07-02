@@ -2,7 +2,7 @@
 from importlib.metadata import entry_points
 import io
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 VERSION = None
@@ -28,13 +28,15 @@ setup(
     description=DESCRIPTION,
     long_description=long_description,
     long_description_content_type="text/markdown",
-    py_modules=['cli'],
+    packages=find_packages(),
+    include_package_data=True,
     install_requires=[
         'Click',
     ],
     entry_points={
         'console_scripts': [
             'casm = CASM.CLI:main',
+            'CASM = CASM.CLI:main',
         ]
     }
 )
