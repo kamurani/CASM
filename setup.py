@@ -34,7 +34,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'casm = casm.cli:main',
+            'casm = CASM.CLI:main',
         ]
     }
 )
