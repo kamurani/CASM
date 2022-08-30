@@ -33,6 +33,11 @@ Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp
 
 
 
+### Generalisable to PDB not just AF2?
+
+- [SIFTS](https://www.ebi.ac.uk/pdbe/docs/sifts/quick.html) for cross referencing sequence positions
+
+
 ## TODO (future) 
 
 - take into account what the structure is like if other PTMs are present 
