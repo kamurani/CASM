@@ -4,9 +4,11 @@
 **C**lustering **A**bstracted **S**tructural **M**otifs
 
 
-Currently using Phosphosite structural motifs for *Saccharomyces cerevisiae* and *Homo sapiens*. 
+Currently using Phosphosite structural motifs for *Mus musculus* and *Homo sapiens*. 
 
 [PhosphoSitePlus](https://www.phosphosite.org/staticDownloads)
+
+Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/swissprot_pdb_v3.tar) (542,380 predicted structures)
 
 
 ## TODO
@@ -17,6 +19,7 @@ Currently using Phosphosite structural motifs for *Saccharomyces cerevisiae* and
 - add more node features / edge features so that interactions can be seen by the algorithm more
 
 - use atom graphs, as opposed to residue and compare clusterings 
+- consider all PTMs, not just phosphorylation
 
 
 - idea from N Warren about using GAT somewhere?
@@ -26,7 +29,13 @@ Currently using Phosphosite structural motifs for *Saccharomyces cerevisiae* and
 - improve structure graph retrieval / storage to not exhaust our memory :( 
 - 
 
+- use environment variables e.g. `$STRUCTURE_DIR` and `$PTM_DATASET_PATH` for running workflows easier without continuously specifying paths to things.
 
+
+
+### Generalisable to PDB not just AF2?
+
+- [SIFTS](https://www.ebi.ac.uk/pdbe/docs/sifts/quick.html) for cross referencing sequence positions
 
 
 ## TODO (future) 
