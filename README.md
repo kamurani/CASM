@@ -16,6 +16,11 @@ Currently using Phosphosite structural motifs for *Saccharomyces cerevisiae* and
 - retrieve embedding from modified residue (MODRES) to get a more comparable representation hopefully 
 - add more node features / edge features so that interactions can be seen by the algorithm more
 
+- use atom graphs, as opposed to residue and compare clusterings 
+
+
+- idea from N Warren about using GAT somewhere?
+
 
 ### Improvements
 - improve structure graph retrieval / storage to not exhaust our memory :( 
