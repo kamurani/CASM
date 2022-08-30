@@ -19,6 +19,7 @@ Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp
 - add more node features / edge features so that interactions can be seen by the algorithm more
 
 - use atom graphs, as opposed to residue and compare clusterings 
+- consider all PTMs, not just phosphorylation
 
 
 - idea from N Warren about using GAT somewhere?
