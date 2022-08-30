@@ -4,9 +4,11 @@
 **C**lustering **A**bstracted **S**tructural **M**otifs
 
 
-Currently using Phosphosite structural motifs for *Saccharomyces cerevisiae* and *Homo sapiens*. 
+Currently using Phosphosite structural motifs for *Mus musculus* and *Homo sapiens*. 
 
 [PhosphoSitePlus](https://www.phosphosite.org/staticDownloads)
+
+Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/swissprot_pdb_v3.tar) (542,380 predicted structures)
 
 
 ## TODO
