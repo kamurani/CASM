@@ -29,6 +29,7 @@ Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp
 - improve structure graph retrieval / storage to not exhaust our memory :( 
 - 
 
+- use environment variables e.g. `$STRUCTURE_DIR` and `$PTM_DATASET_PATH` for running workflows easier without continuously specifying paths to things.
 
 
 
