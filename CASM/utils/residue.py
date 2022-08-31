@@ -35,8 +35,7 @@ def aa1to3(
         "W": "Trp",
         "Y": "Tyr",
     }
-
     try: 
-        return map[aa.upper()].upper()
+        return protein_letters_1to3[aa.upper()].upper()
     except:
         raise ValueError(f"Specified residue '{aa}' invalid.")

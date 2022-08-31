@@ -6,6 +6,7 @@ Agnostic as to how the structure was determined.  Simply receives a directory of
 """
 
 from email.policy import default
+from typing import Callable, List, Union
 from utils.residue import aa1to3
 
 import pandas as pd
@@ -25,8 +26,6 @@ def mod_rsd2node_id(
     mod_rsd: str, 
     chain_id: str = 'A', # TODO by default, assume that we are using AF2 i.e. always one chain, no multimeric proteins. 
 ) -> str:
-
-    re.compile()
 
     # {RES}{POS}-{PTM}
     p = re.compile("([a-zA-Z]{1})([0-9]+)-([a-zA-Z])")
@@ -53,11 +52,47 @@ def load_psp_list(
     
     return df
 
-@c.command()
-@c.argument('PTM_DATASET', nargs=1)
-@c.argument('PDB_DIR', nargs=1)
-@c.argument('OUT_DIR', nargs=1)
+"""Returns a function that can filter a dataframe of residue IDs"""
+"""
+Note: assumes that data field input (in returned function) is of form A:RES:000
+"""
 
+def get_residue_filter(
+    residues: Union[List[str], str],
+    invert: bool = False,
+) -> Callable:
+    """
+    :param residues: Either a string containing 1-letter codes. 
+    :type residues: Union[List[str], str] 
+    :param invert: Return True if the input is NOT in the specified list of residues.  Defaults to ``False``. 
+    :type invert: bool
+
+
+    To allow for all residues (i.e. apply no filtering), an empty list can be supplied with ``invert`` set to ``True``.
+    
+    """
+    if type(residues) == str: # String containing 1-letter codes
+        residues = residues.upper()
+    else:   # List
+        residues = "".join(aa1to3(x.upper()) for x in residues)
+
+
+    return lambda x: not invert if (aa3to1(x.split(':')[1]) in residues) else invert
+
+    A, B = True, False 
+    if invert: A, B = B, A
+
+@c.command()
+@c.argument(
+    'PTM_DATASET', nargs=1,
+    type=c.Path(exists=True, file_okay=True, dir_okay=False),
+)
+@c.argument('PDB_DIR', nargs=1,
+    type=c.Path(exists=True, file_okay=False, dir_okay=True),
+)
+@c.argument('OUT_DIR', nargs=1,
+    type=c.Path(exists=True, file_okay=False, dir_okay=True),
+)
 @c.option(
     "--organism",
     help="Filter which organism to include.  Includes all organisms by default.",
@@ -65,8 +100,39 @@ def load_psp_list(
     type=c.STRING,
     default="ALL",
     show_default=True,
-
     
+)
+
+@c.option(
+    "-S",
+    "-s",
+    "--ser",
+    "--SER",
+    "--Ser",
+    "s",
+
+    is_flag=True,
+
+)
+@c.option(
+    "-T",
+    "-t",
+    "--THR",
+    "--Thr",
+    "--thr",    
+    "t",        # dest
+    is_flag=True,
+
+)
+@c.option(
+    "-Y",
+    "-y",
+    "--tyr",
+    "--Tyr",
+    "--TYR",
+    "y",
+    is_flag=True,
+
 )
 def main(
     ptm_dataset,
@@ -75,7 +141,20 @@ def main(
 
     # options
     organism,
+    s,
+    t,
+    y,
 ):
+
+    
+    residues = ""
+    if s: residues += 'S' 
+    if t: residues += 'T'
+    if y: residues += 'Y' 
+
+
+    
+
     ptm_dataset
     df: pd.DataFrame = load_psp_list(ptm_dataset)
 
@@ -85,20 +164,25 @@ def main(
 
         # if no results
         if organism in df.ORGANISM.unique():
-            print("YES")
-            return
-
-        df = df[df["ORGANISM"] == organism]
-
-    df = df[df[""]]
+            df = df[df["ORGANISM"] == organism]
+        else:
+            raise ValueError(f"Specified organism '{organism}' not in dataset.")
+    #df = df[df[""]]
 
     """Generate and save graphs to output directory for each psite"""
     
 
     # convert MOD_RSD to node ID
+    df['MOD_RSD_ID'] = df.MOD_RSD.apply(mod_rsd2node_id)
 
     # check that it is expected residue (if not, skip structure; sequence info in UniProt may have been updated)
 
+    # If no residues are selected, include all. 
+    # Filter to include selected residue types.
+    filt = get_residue_filter(residues, invert=(not residues))
+    df = df[df['MOD_RSD_ID'].apply(filt)]
+
+    print(df)
     
 
 
