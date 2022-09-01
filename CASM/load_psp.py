@@ -5,7 +5,7 @@ Agnostic as to how the structure was determined.  Simply receives a directory of
 
 """
 
-from email.policy import default
+from pathlib import Path
 from typing import Callable, List, Union
 from utils.residue import aa1to3
 
@@ -17,6 +17,8 @@ import graphein
 
 from graphein.utils.utils import protein_letters_3to1_all_caps as aa3to1
 from utils.residue import aa3to1, aa1to3
+
+from tqdm import tqdm
 
 
 from definitions import GRAPH_NODE_FEATURES
@@ -82,6 +84,38 @@ def get_residue_filter(
     A, B = True, False 
     if invert: A, B = B, A
 
+
+def filter_psp_list(
+    df: pd.DataFrame, 
+    residues: Union[List, str],
+
+
+) -> pd.DataFrame:
+
+    pass
+
+
+
+def graph_dump(
+    filename: str, 
+    out_dir: Path, 
+    
+):
+    pass
+
+
+def get_graph_filename(
+    acc_id: str,
+    mod_rsd: str,
+    radius: float,
+    extension: str = "pickle"  # JSON, .dat, etc. 
+
+) -> str:
+
+    return f"AF-{acc_id}-{mod_rsd}-R{radius}.{extension}" 
+
+
+
 @c.command()
 @c.argument(
     'PTM_DATASET', nargs=1,
@@ -134,117 +168,9 @@ def get_residue_filter(
     is_flag=True,
 
 )
-def main(
-    ptm_dataset,
-    pdb_dir, 
-    out_dir,
-
-    # options
-    organism,
-    s,
-    t,
-    y,
-):
-
-    
-    residues = ""
-    if s: residues += 'S' 
-    if t: residues += 'T'
-    if y: residues += 'Y' 
-
-
-    
-
-    ptm_dataset
-    df: pd.DataFrame = load_psp_list(ptm_dataset)
-
-    
-    # Filter organisms if specified
-    if not organism == "ALL":
-
-        # if no results
-        if organism in df.ORGANISM.unique():
-            df = df[df["ORGANISM"] == organism]
-        else:
-            raise ValueError(f"Specified organism '{organism}' not in dataset.")
-    #df = df[df[""]]
-
-    """Generate and save graphs to output directory for each psite"""
-    
-
-    # convert MOD_RSD to node ID
-    df['MOD_RSD_ID'] = df.MOD_RSD.apply(mod_rsd2node_id)
-
-    # check that it is expected residue (if not, skip structure; sequence info in UniProt may have been updated)
-
-    # If no residues are selected, include all. 
-    # Filter to include selected residue types.
-    filt = get_residue_filter(residues, invert=(not residues))
-    df = df[df['MOD_RSD_ID'].apply(filt)]
-
-    print(df)
-    
-
-
-if __name__ == "__main__":
-    main()
-
-"""    
-
-@c.command()
-@c.argument('sites', nargs=1)
-#@c.argument('structures', nargs=1)
-#@c.argument('graphs', nargs=1)
 @c.option(
-    "--verbose",
-    "-v",
-    is_flag=True,
-    help="Show extensive program output."
-)
-@c.option(
-    "--debug",
-    "-d",
-    is_flag=True,
-    help="Show extensive program output for debugging."
-)
-@c.option(
-    "--quiet",
-    "-q",
-    is_flag=True,
-    help="Suppress program output."
-)
-@c.option(
-    "--dry-run",
-    "--dryrun",
-    "-n",
-    "is_dryrun",
-    is_flag=True,
-    help="Print out what the program would do without loading the graphs.",
-)
-@c.option(
-    "--unique",
-    "-u",
-    is_flag=True,
-    help="Only construct graphs for unique motifs.  Duplicate entries (i.e. with different kinases) are ignored."
-)
-
-@c.option(
-    # TODO: support multiple formats selected at once; i.e. saves more than one file.
-    "-o",
-    "--graph-format",
-    "--output-format",
-    "--format",
-    type=c.Choice(['NetworkX', 'StellarGraph', 'nx', 'sg'], case_sensitive=False),
-    help="Save graphs as NetworkX or StellarGraph instances with feature preprocessing. ",
-    default="NetworkX",
-    show_default=True,
-)
-@c.option(
-    "-N",
-    "--num-psites",
-    help="Only consider the first N motifs in a dataset.  Graph construction will continue until N graphs are made, or the end of the dataset is reached.",
-    type=c.INT,
-    default=-1, 
+    "--ptm",
+    # TODO
 )
 @c.option(
     "-r",
@@ -255,66 +181,139 @@ if __name__ == "__main__":
     show_default=True,
 )
 @c.option(
-    "--rsa",
-    "--rsa-threshold",
-    help="The RSA threshold of the motif",
-    type=c.FLOAT,
-    default=0.0,
+    "--num",
+    "--num-rows",
+    "num_rows",
+    help="Only use the first N rows of the dataset; or last N rows (negative number)",
+    default="ALL",
     show_default=True,
-)
-@c.option(
-    "--node-features",
-    "--nf",
-    is_flag=False,
-    default=','.join(GRAPH_NODE_FEATURES), show_default=True,
-    metavar="<node_features>",
-    type=c.STRING,
-    help="Which node features to include in the constructed graphs."
-)
-@c.option(
-    "--edge-features",
-    "--ef",
-    is_flag=False,
-)
-@c.option(
-    "--config",
-    "-c",
-    help="Path to config.yml file used to specify how to construct the graphs.",
-    # TODO: check if path right here?
-    default="config.yml",
-    show_default=True,
+    type=c.STRING, 
 )
 def main(
-    # POSITIONAL ARGUMENTS:
-    phosphosite,  
-      
-    structures,
-    graphs,
+    ptm_dataset,
+    pdb_dir, 
+    out_dir,
 
-    # FLAGS:
-    verbose,
-    debug,
-    quiet,
-    is_dryrun,
-    unique,
-
-    # PARAMETERS:
-    graph_format,
-    num_psites,
+    # options
+    organism,
+    s,
+    t,
+    y,
+    
+    ptm,
     radius,
-    rsa,
-    node_features,
-    edge_features,
-    config,
+
+    num_rows,
 ):
 
-    print("test")
+    # Num rows
+    if num_rows.upper() == "ALL":
+        num_rows = 0
+    else:
+        try:
+            num_rows = int(num_rows)
+        except:
+            raise ValueError(f"Specified number of rows '{num_rows}' not an integer.")
 
-    path = "/home/cim/STRUCTURAL_MOTIFS/CASM/datasets/Phosphorylation_site_dataset"
 
-    print(phosphosite)
-    df: pd.DataFrame = load_psp_list(phosphosite)
+    residues = ""
+    if s: residues += 'S' 
+    if t: residues += 'T'
+    if y: residues += 'Y' 
 
-    print(df)
 
-"""
+    
+
+    df: pd.DataFrame = load_psp_list(ptm_dataset)
+    
+    #df = filter_psp_list(df, )
+
+    # Filter organisms if specified
+    if not organism.upper() == "ALL":
+
+        # if no results
+        if organism in df.ORGANISM.unique():
+            df = df[df["ORGANISM"] == organism]
+        else:
+            raise ValueError(f"Specified organism '{organism}' not in dataset.")
+
+
+    # Get first (or last) N rows
+    if num_rows > 0: df = df.head(num_rows)     # N:    First N rows
+    elif num_rows < 0: df = df.tail(-num_rows)  # -N:   Last N rows
+
+    print(f"Length: {len(df)}")
+    return
+    # convert MOD_RSD to node ID
+    df['MOD_RSD_ID'] = df.MOD_RSD.apply(mod_rsd2node_id)
+
+
+
+    df[['MOD_RSD_POS', 'MOD_RSD_PTM']] = df.MOD_RSD.apply(lambda x: pd.Series(str(x).split('-')))
+
+    # check that it is expected residue (if not, skip structure; sequence info in UniProt may have been updated)
+
+    # If no residues are selected, include all. 
+    # Filter to include selected residue types.
+    filt = get_residue_filter(residues, invert=(not residues))
+    df = df[df['MOD_RSD_ID'].apply(filt)]
+
+
+    print(f"Num unique proteins: {len(df['ACC_ID'].unique())}")
+
+
+    """Generate and save graphs to output directory for each psite"""
+
+
+    p = Path(out_dir)
+
+
+    df_dict = df.to_dict('records')
+
+    return
+
+    for row in tqdm(df_dict):
+        
+        acc_id      = row["ACC_ID"]
+        mod_rsd     = row["MOD_RSD_POS"]
+        mod_rsd_ptm = row["MOD_RSD_PTM"]
+
+
+        Path()
+
+        p = p / organism / get_graph_filename(acc_id, mod_rsd, radius)
+        g_out_path = p
+        
+
+
+        #r = radius * radius
+
+        #print(g_out_path)
+
+        """Create subgraph, dump subgraph"""
+
+        g = get_motif_subgraph 
+
+
+        graph_dump(g, )
+
+
+
+    # TODO: create path if doesn't exist (i.e. no such 'human' subdirectory; create as required.)
+    
+    #graph_dump()
+
+
+
+
+    """outfile =  open(out_path, 'wb')
+    pickle.dump(data, outfile)
+    outfile.close()"""
+
+    #print(df)
+    
+
+
+if __name__ == "__main__":
+    main()
+
