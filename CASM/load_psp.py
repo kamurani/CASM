@@ -239,8 +239,8 @@ def main(
 
 
     # Get first (or last) N rows
-    if num_rows > 0: df = df.head(num_rows)     # N:    First N rows
-    elif num_rows < 0: df = df.tail(-num_rows)  # -N:   Last N rows
+    if num_rows > 0 and num_rows    <= len(df): df = df.head(num_rows)      # N:    First N rows
+    elif num_rows < 0 and -num_rows <= len(df): df = df.tail(-num_rows)     # -N:   Last N rows
 
     print(f"Length: {len(df)}")
     return
