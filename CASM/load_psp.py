@@ -5,11 +5,19 @@ Agnostic as to how the structure was determined.  Simply receives a directory of
 
 """
 
+from operator import inv
+import os
 from pathlib import Path
+import pdb
+import pickle
 from typing import Callable, List, Union
+from subgraphs import get_motif_subgraph
 from utils.residue import aa1to3
 
 import pandas as pd
+pd.options.mode.chained_assignment = None  # default='warn'
+
+
 import click as c
 import re
 
@@ -95,6 +103,35 @@ def filter_psp_list(
     pass
 
 
+"""
+Print list of ACC_IDs for structures that were not found in AF database
+"""
+def print_dataset_pdb_matches(
+    df: pd.DataFrame, 
+    pdb_dir, 
+    fields: List[str] = ["ACC_ID"],
+    delim: str = '\t', 
+    invert: bool = True, # if true, shows structures that are missing
+):
+    df_dict = df.to_dict('records')
+
+    for row in df_dict: # tqdm
+
+        p = Path(pdb_dir) 
+
+        p = p / get_pdb_filename(acc_id=row["ACC_ID"])
+        p = p.resolve() # get absolute path
+
+        output = "\t".join([row[f] for f in fields])
+
+        pdb_path = str(p)
+
+        # TODO: more elaborate check, e.g. an actual valid PDB file (not just a file with the correct name)
+        
+        condition = os.path.isfile(pdb_path) != invert # XOR operator
+        if condition:
+            print(output)
+        
 
 def graph_dump(
     filename: str, 
@@ -114,6 +151,25 @@ def get_graph_filename(
 
     return f"AF-{acc_id}-{mod_rsd}-R{radius}.{extension}" 
 
+"""
+Get AlphaFold filename from database download
+"""
+def get_pdb_filename(
+    acc_id: str, 
+
+    file_extension: str = "pdb", # could be .pdb.gz 
+
+    model_version: int = 3, 
+    ignore_fragments: bool = True, 
+
+) -> str: 
+
+    if ignore_fragments:
+        fragment = 1
+        return f"AF-{acc_id}-F{fragment}-model_v{model_version}.{file_extension}"
+    else:
+        raise NotImplementedError(f"Multiple fragments for AF structure not implemented. ")
+
 
 
 @c.command()
@@ -125,7 +181,7 @@ def get_graph_filename(
     type=c.Path(exists=True, file_okay=False, dir_okay=True),
 )
 @c.argument('OUT_DIR', nargs=1,
-    type=c.Path(exists=True, file_okay=False, dir_okay=True),
+    type=c.Path(exists=False, file_okay=False, dir_okay=True),
 )
 @c.option(
     "--organism",
@@ -189,6 +245,15 @@ def get_graph_filename(
     show_default=True,
     type=c.STRING, 
 )
+@c.option(
+    "--show-matches",
+    is_flag=True, 
+)
+@c.option(
+    "--force",
+    help="Override existing files", 
+    is_flag=True, 
+)
 def main(
     ptm_dataset,
     pdb_dir, 
@@ -204,7 +269,17 @@ def main(
     radius,
 
     num_rows,
+    show_matches, 
+
+    force, 
 ):
+
+    """TODO: prompt user for confirming output directory, filename scheme, etc. before continuing"""
+
+
+    """TODO: check for overwrite (i.e. grpah files with same name already present; can be overridden with --force"""
+
+    organism = organism.lower()
 
     # Num rows
     if num_rows.upper() == "ALL":
@@ -242,12 +317,8 @@ def main(
     if num_rows > 0 and num_rows    <= len(df): df = df.head(num_rows)      # N:    First N rows
     elif num_rows < 0 and -num_rows <= len(df): df = df.tail(-num_rows)     # -N:   Last N rows
 
-    print(f"Length: {len(df)}")
-    return
     # convert MOD_RSD to node ID
     df['MOD_RSD_ID'] = df.MOD_RSD.apply(mod_rsd2node_id)
-
-
 
     df[['MOD_RSD_POS', 'MOD_RSD_PTM']] = df.MOD_RSD.apply(lambda x: pd.Series(str(x).split('-')))
 
@@ -259,27 +330,69 @@ def main(
     df = df[df['MOD_RSD_ID'].apply(filt)]
 
 
-    print(f"Num unique proteins: {len(df['ACC_ID'].unique())}")
+    #print(f"Num unique proteins: {len(df['ACC_ID'].unique())}")
 
+    if show_matches: 
+        
+
+        df = df.drop_duplicates(subset='ACC_ID', keep='first')
+        print_dataset_pdb_matches(
+            df=df,
+            pdb_dir=pdb_dir,
+
+        )
+        return
 
     """Generate and save graphs to output directory for each psite"""
 
 
     p = Path(out_dir)
 
+    p = p / organism  
+    
+    
+
+
+    p.mkdir(parents=True, exist_ok=True)
+
+    fn: str = get_graph_filename('5555', 'S100', '8.0')
+    filepath = p / fn 
+
+
+    # Create graph dictionary 
+
+
+    
+
+    
+
+
+    # Check if filepath exists
+    if os.path.isfile(filepath):
+        print("ALREADY A FILE.")
+
+    else: 
+        pass
+        with filepath.open("w", encoding="utf-8") as f:
+            
+            pickle.dump(g_dict, f)
+
+
+
+
+    print(p.is_file)
+
+
 
     df_dict = df.to_dict('records')
-
-    return
 
     for row in tqdm(df_dict):
         
         acc_id      = row["ACC_ID"]
+        mod_rsd_id  = row["MOD_RSD_ID"]
         mod_rsd     = row["MOD_RSD_POS"]
         mod_rsd_ptm = row["MOD_RSD_PTM"]
 
-
-        Path()
 
         p = p / organism / get_graph_filename(acc_id, mod_rsd, radius)
         g_out_path = p
@@ -292,10 +405,31 @@ def main(
 
         """Create subgraph, dump subgraph"""
 
-        g = get_motif_subgraph 
+        p = Path(pdb_dir) 
+
+        p = p / get_pdb_filename(acc_id=acc_id)
+        p = p.resolve() # get absolute path
+
+        pdb_path = str(p)
+        if not os.path.isfile(pdb_path):
+            print(f"No structure for {acc_id}")
+            continue
+            
+
+        g = get_motif_subgraph(
+            pdb_path=pdb_path,
+            radius=radius,
+            mod_rsd=mod_rsd_id,
+        )
+
+        g_dict = {
+            "graph": g, 
+            "kinase": "UNKNOWN",
+        }
 
 
-        graph_dump(g, )
+        #print(g, mod_rsd)
+        #graph_dump(g, )
 
 
 
