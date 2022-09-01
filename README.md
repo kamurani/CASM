@@ -44,6 +44,12 @@ Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp
 - apply clustering to more PTMs
 
 
+## Workflow 
+
+- have a separate command for 'filter dataset' and 'load graphs', allowing control (and config files) to be decoupled for each of the two processes
+- may require a temporary dataset file that is created when 'filter dataset' is run; the path to this temporary file may be another environment variable (with some default value)
+
+
 ## Journal
 
 
