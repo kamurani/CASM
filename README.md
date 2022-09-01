@@ -10,6 +10,15 @@ Currently using Phosphosite structural motifs for *Mus musculus* and *Homo sapie
 
 Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/swissprot_pdb_v3.tar) (542,380 predicted structures)
 
+## Data processing
+
+PSP dataset
+
+```
+# Unique proteins 
+cat ../datasets/Phosphorylation_site_dataset | tail -n +5 | cut -f3 | sort | uniq | wc -l 
+```
+
 
 ## TODO
 
