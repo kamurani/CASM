@@ -47,6 +47,9 @@ cat ../datasets/Phosphorylation_site_dataset | tail -n +5 | cut -f3 | sort | uni
 - [SIFTS](https://www.ebi.ac.uk/pdbe/docs/sifts/quick.html) for cross referencing sequence positions
 
 
+- Deal with uncurated sequences (e.g. A0A6J1BG53 (A0A6J1BG53_9ROSI) ) from alphafold 
+
+
 ## TODO (future) 
 
 - take into account what the structure is like if other PTMs are present 
