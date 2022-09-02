@@ -5,6 +5,9 @@ Agnostic as to how the structure was determined.  Simply receives a directory of
 
 """
 
+from distutils import extension
+from genericpath import isdir
+from multiprocessing.sharedctypes import Value
 from operator import inv
 import os
 from pathlib import Path
@@ -17,6 +20,7 @@ from utils.residue import aa1to3
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 
+import networkx as nx
 
 import click as c
 import re
@@ -24,12 +28,34 @@ import re
 import graphein 
 
 from graphein.utils.utils import protein_letters_3to1_all_caps as aa3to1
+
+from graphein.protein.graphs import construct_graph
+
 from utils.residue import aa3to1, aa1to3
 
 from tqdm import tqdm
 
 
 from definitions import GRAPH_NODE_FEATURES
+from subgraphs import get_motif_subgraph
+
+
+"Get AlphaFold filename from database download"
+def get_pdb_filename(
+    acc_id: str, 
+    file_extension: str, # could be .pdb.gz 
+
+    model_version: int = 3, 
+    ignore_fragments: bool = True, 
+
+) -> str: 
+
+    if ignore_fragments:
+        fragment = 1
+        return f"AF-{acc_id}-F{fragment}-model_v{model_version}.{file_extension}"
+    else:
+        raise NotImplementedError(f"Multiple fragments for AF structure not implemented. ")
+
 
 
 def mod_rsd2node_id(
@@ -104,7 +130,7 @@ def filter_psp_list(
 
 
 """
-Print list of ACC_IDs for structures that were not found in AF database
+Print list of ACC_IDs for structures that were not found in PDB_DIR
 """
 def print_dataset_pdb_matches(
     df: pd.DataFrame, 
@@ -151,27 +177,112 @@ def get_graph_filename(
 
     return f"AF-{acc_id}-{mod_rsd}-R{radius}.{extension}" 
 
-"""
-Get AlphaFold filename from database download
-"""
-def get_pdb_filename(
-    acc_id: str, 
 
-    file_extension: str = "pdb", # could be .pdb.gz 
 
-    model_version: int = 3, 
-    ignore_fragments: bool = True, 
-
-) -> str: 
-
-    if ignore_fragments:
-        fragment = 1
-        return f"AF-{acc_id}-F{fragment}-model_v{model_version}.{file_extension}"
-    else:
-        raise NotImplementedError(f"Multiple fragments for AF structure not implemented. ")
+def is_list_of_str(
+    lst,
+):
+    if lst and isinstance(lst, list):
+        return all(isinstance(elem, str) for elem in lst)
+    else: 
+        return False
 
 
 
+"TODO: add pipeline feature for subgraph steps"
+"Get graphs from a set directory given acc_id"
+class GraphLoader:
+    def __init__(
+        self,
+        config, 
+        pdb_dir: Union[str, Path],
+        extension: str = "pdb", # XXX unused
+        ignore: bool = False, # ignore missing directories 
+
+        functions: List[Callable] = None, # TODO: specify subgraph selecting functions to be applied 
+    ):
+
+        # TODO: store `pdb_dir` in the config , more elegant
+        # TODO: check if exists, and contains expected filename extensions
+        if type(pdb_dir) is str: 
+            pdb_dir = Path(pdb_dir)
+
+        self.pdb_dir = pdb_dir
+        if not ignore and not os.path.isdir(str(pdb_dir)):
+            raise ValueError(f"No such directory '{str(pdb_dir)}'") 
+
+        self.config = config
+        self.extension = extension
+
+    
+    
+    "Get PDB path as a string"
+    def get_pdb_path(self, acc_id: str):
+
+        p = self.pdb_dir / get_pdb_filename(acc_id, file_extension=self.extension)
+        p = p.resolve() # get absolute path
+        pdb_path = str(p)
+        return pdb_path
+
+    "Get graph object from an acc_id, or list of them"
+    def get_graph(self, acc_id: Union[str, List[str]]): 
+
+        if type(acc_id) is str: 
+            pdb_path: str = self.get_pdb_path(acc_id) 
+            
+            if not os.path.isfile(pdb_path):
+                return None 
+
+            g = construct_graph(config=self.config, pdb_path=pdb_path)
+            return g 
+        
+        elif is_list_of_str(acc_id):
+            
+            graphs = {}
+            for i in acc_id: 
+
+                g: nx.Graph = self.get_graph(i)
+                graphs[i] = g
+            return graphs 
+
+        else: 
+            raise ValueError(f"acc_id must be string or list of strings.")
+
+    
+
+class MotifLoader(GraphLoader):
+    def __init__(self, config, pdb_dir: Union[str, Path], extension: str = "pdb", ignore: bool = False, functions: List[Callable] = None,
+        radius: float = 10.0, # radius threshold (Å)
+        rsa: float = 0.0, 
+
+    ):
+        super().__init__(config, pdb_dir, extension, ignore, functions)
+
+        self.radius = radius 
+        self.rsa = rsa 
+
+    # TODO: similar to GraphLoader, handle `List[str]` of acc_ids ?
+    def get_motif(self, acc_id: str, mod_rsd: str):
+
+        g = self.get_graph(acc_id) 
+
+        # **Reasons for failure**
+        # * `mod_rsd` not in `g` (e.g. RSA threshold too high)
+        
+
+        s_g = get_motif_subgraph(
+            g, 
+            mod_rsd=mod_rsd, 
+            radius=self.radius,
+            rsa=self.rsa,
+        )
+        try: pass
+        except:
+            s_g = None
+
+        return s_g
+        
+        
 @c.command()
 @c.argument(
     'PTM_DATASET', nargs=1,
@@ -378,10 +489,14 @@ def main(
             pickle.dump(g_dict, f)
 
 
-
-
-    print(p.is_file)
-
+    # Get graph loader
+    from defaults import get_default_graph_config
+    config = get_default_graph_config()
+    loader = MotifLoader(
+        config=config, 
+        pdb_dir=pdb_dir, 
+        radius=radius,
+    )
 
 
     df_dict = df.to_dict('records')
@@ -405,22 +520,7 @@ def main(
 
         """Create subgraph, dump subgraph"""
 
-        p = Path(pdb_dir) 
-
-        p = p / get_pdb_filename(acc_id=acc_id)
-        p = p.resolve() # get absolute path
-
-        pdb_path = str(p)
-        if not os.path.isfile(pdb_path):
-            print(f"No structure for {acc_id}")
-            continue
-            
-
-        g = get_motif_subgraph(
-            pdb_path=pdb_path,
-            radius=radius,
-            mod_rsd=mod_rsd_id,
-        )
+        g: nx.Graph = loader.get_motif(acc_id, mod_rsd_id)     
 
         g_dict = {
             "graph": g, 
@@ -428,7 +528,7 @@ def main(
         }
 
 
-        #print(g, mod_rsd)
+        print(g.nodes(), mod_rsd)
         #graph_dump(g, )
 
 
