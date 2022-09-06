@@ -10,6 +10,10 @@ Currently using Phosphosite structural motifs for *Mus musculus* and *Homo sapie
 
 Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/swissprot_pdb_v3.tar) (542,380 predicted structures)
 
+
+
+
+
 ## Data processing
 
 PSP dataset
@@ -25,6 +29,12 @@ Setup
 ```
 export PYTHONPATH="${PYTHONPATH}:/home/cim/STRUCTURAL_MOTIFS/CASM/"
 ```
+
+## Unspervised 
+
+GraphCL -- contrast learning. 
+
+- can be used at node-level, graph-level, or **both**. 
 
 ## SCISM 
 
