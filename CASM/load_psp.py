@@ -265,22 +265,50 @@ class MotifLoader(GraphLoader):
     def get_motif(self, acc_id: str, mod_rsd: str):
 
         g = self.get_graph(acc_id) 
+        g.name = f"{acc_id}@{mod_rsd}"
 
         # **Reasons for failure**
         # * `mod_rsd` not in `g` (e.g. RSA threshold too high)
         
-
-        s_g = get_motif_subgraph(
-            g, 
-            mod_rsd=mod_rsd, 
-            radius=self.radius,
-            rsa=self.rsa,
-        )
-        try: pass
+        try: 
+            s_g = get_motif_subgraph(
+                g, 
+                mod_rsd=mod_rsd, 
+                radius=self.radius,
+                rsa=self.rsa,
+            )
+        
         except:
             s_g = None
 
+            # DEBUG 
+            print("Subgraph creation failed.")
+
         return s_g
+
+class GraphDumper:
+    def __init__(
+        self,
+        out_dir,
+        method: str = "json", # method to use to represent the graph
+
+    ) -> None:
+        self.out_dir = out_dir,
+        self.method = method.lower(),
+
+    def dump(
+        self,
+        g: Union[nx.Graph, str], # allow multiple types of graphs to be dumped
+    ):
+
+        if self.method is "json":
+            pass 
+
+        if isinstance(g, (nx.Graph)):
+            pass  
+
+        #if isinstance(graph['graph'], (sg.StellarGraph, nx.Graph)):
+    
         
         
 @c.command()
@@ -498,6 +526,10 @@ def main(
         radius=radius,
     )
 
+    dumper = GraphDumper(
+        out_dir=out_dir,
+    )
+
 
     df_dict = df.to_dict('records')
 
@@ -528,7 +560,8 @@ def main(
         }
 
 
-        print(g.nodes(), mod_rsd)
+        print(f"G: {g}")
+        print(f"MOD_RSD: {mod_rsd_id}")
         #graph_dump(g, )
 
 

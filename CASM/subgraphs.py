@@ -35,7 +35,6 @@ def get_motif_subgraph(
 ) -> nx.Graph:
 
     #if type(pdb_path) is not str: pdb_path = str(pdb_path)
-    
     try:
         g_site: Dict = g.nodes(data=True)[mod_rsd]
     except:
@@ -47,9 +46,8 @@ def get_motif_subgraph(
     # Subgraph (radius)
     s_g = get_protein_subgraph_radius(g=g, site=mod_rsd, r=radius)
 
-    print(s_g.nodes())
 
     # Subgraph (rsa)
+    # TODO
 
-
-    return g
+    return s_g
