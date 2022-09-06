@@ -26,6 +26,20 @@ Setup
 export PYTHONPATH="${PYTHONPATH}:/home/cim/STRUCTURAL_MOTIFS/CASM/"
 ```
 
+## SCISM 
+
+- use dataset of known interactions (substrate-kinase pair) for training / testing / validation
+- use atom or residue graphs in pairs; generate pair of embeddings; concatenate into a vector; apply FC layers of NN to output; repeat for every possible pair;  or apply a GAT/GCN on the graphs themselves (no vectorisation during learning?) 
+- visualise CAM for identifying important residues 
+
+
+alternative idea:
+- don't feed in kinase structures; rather, generate representations of kinase structure (similar to what SeqVec does), and this is internally represented in the NN somehow.  this info is used when a protein graph (substrate) is fed in; the network will output scores for each kinase. 
+
+
+alternative alternative idea:
+- just have 127 separate neural networks (each for a given kinase); you feed in a psite and it spits out a score. 
+
 
 ## TODO
 
