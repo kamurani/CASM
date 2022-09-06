@@ -70,6 +70,10 @@ export PYTHONPATH="${PYTHONPATH}:/home/cim/STRUCTURAL_MOTIFS/CASM/"
 - apply clustering to more PTMs
 
 
+- incorporate kinase structure (like when doing protein docking??)
+- look at GNN approaches in the literature that did docking type things; could actually incorporate all the known kinase structures AS WELL AS the phosphosites; and then get a score for each kinase from a GNN model (e.g. create residue- or atom- network graph, then the model has a representation of each kinase as well; and it gives a log-flattened score for each (e.g. .9 for one kinase, 0.01 for the others)
+
+
 ## Workflow 
 
 - have a separate command for 'filter dataset' and 'load graphs', allowing control (and config files) to be decoupled for each of the two processes
