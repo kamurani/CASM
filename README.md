@@ -20,6 +20,13 @@ cat ../datasets/Phosphorylation_site_dataset | tail -n +5 | cut -f3 | sort | uni
 ```
 
 
+Setup 
+
+```
+export PYTHONPATH="${PYTHONPATH}:/home/cim/STRUCTURAL_MOTIFS/CASM/"
+```
+
+
 ## TODO
 
 - retrieve from PSP instead of phosphoELM
