@@ -31,7 +31,9 @@ export PYTHONPATH="${PYTHONPATH}:/home/cim/STRUCTURAL_MOTIFS/CASM/"
 
 - retrieve from PSP instead of phosphoELM
 - apply cutoff for pLDDT score to remove "sequence motifs" from dataset 
-- retrieve embedding from modified residue (MODRES) to get a more comparable representation hopefully 
+- retrieve embedding from modified residue (`MOD_RSD`) to get a more comparable representation hopefully 
+- compare this with `RMSD` of the aligned motifs (with `MOD_RSD` of each enforced to be superimposed)
+- 
 - add more node features / edge features so that interactions can be seen by the algorithm more
 
 - use atom graphs, as opposed to residue and compare clusterings 
@@ -40,6 +42,11 @@ export PYTHONPATH="${PYTHONPATH}:/home/cim/STRUCTURAL_MOTIFS/CASM/"
 
 - idea from N Warren about using GAT somewhere?
 
+### Training 
+
+- unsupervised representation learning, apply clustering, no labels used 
+- supervised: use labels for classification task; THEN get embeddings (or then just run the model on ALL sites, known and unknown)
+- semi-supervised: allow clustering for unknown samples and classification for known samples (but together)
 
 ### Improvements
 - improve structure graph retrieval / storage to not exhaust our memory :( 
