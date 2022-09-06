@@ -9,7 +9,7 @@ from typing import Callable, List, Union
 
 import networkx as nx
 
-from CASM.load_psp import get_pdb_filename, is_list_of_str
+from CASM.utils.a import get_pdb_filename, is_list_of_str
 from CASM.subgraphs import get_motif_subgraph
 
 from graphein.protein.graphs import construct_graph
