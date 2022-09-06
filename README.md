@@ -41,6 +41,9 @@ alternative alternative idea:
 - just have 127 separate neural networks (each for a given kinase); you feed in a psite and it spits out a score. 
 
 
+IDEA: transfer learning
+- pretrain on large unlabelled dataset (get representation of proteins); then finetune with smaller labelled dataset.  but use same model obviously; it has 'seen' more info 
+
 ## TODO
 
 - retrieve from PSP instead of phosphoELM
