@@ -36,6 +36,8 @@ from utils.residue import aa3to1, aa1to3
 from tqdm import tqdm
 
 
+
+
 from definitions import GRAPH_NODE_FEATURES
 from subgraphs import get_motif_subgraph
 
@@ -301,7 +303,7 @@ class GraphDumper:
         g: Union[nx.Graph, str], # allow multiple types of graphs to be dumped
     ):
 
-        if self.method is "json":
+        if self.method == "json":
             pass 
 
         if isinstance(g, (nx.Graph)):
@@ -525,6 +527,7 @@ def main(
         pdb_dir=pdb_dir, 
         radius=radius,
     )
+
 
     dumper = GraphDumper(
         out_dir=out_dir,
