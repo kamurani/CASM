@@ -10,6 +10,10 @@ Currently using Phosphosite structural motifs for *Mus musculus* and *Homo sapie
 
 Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/swissprot_pdb_v3.tar) (542,380 predicted structures)
 
+
+
+
+
 ## Data processing
 
 PSP dataset
@@ -20,11 +24,43 @@ cat ../datasets/Phosphorylation_site_dataset | tail -n +5 | cut -f3 | sort | uni
 ```
 
 
+Setup 
+
+```
+export PYTHONPATH="${PYTHONPATH}:/home/cim/STRUCTURAL_MOTIFS/CASM/"
+```
+
+## Unspervised 
+
+GraphCL -- contrast learning. 
+
+- can be used at node-level, graph-level, or **both**. 
+
+## SCISM 
+
+- use dataset of known interactions (substrate-kinase pair) for training / testing / validation
+- use atom or residue graphs in pairs; generate pair of embeddings; concatenate into a vector; apply FC layers of NN to output; repeat for every possible pair;  or apply a GAT/GCN on the graphs themselves (no vectorisation during learning?) 
+- visualise CAM for identifying important residues 
+
+
+alternative idea:
+- don't feed in kinase structures; rather, generate representations of kinase structure (similar to what SeqVec does), and this is internally represented in the NN somehow.  this info is used when a protein graph (substrate) is fed in; the network will output scores for each kinase. 
+
+
+alternative alternative idea:
+- just have 127 separate neural networks (each for a given kinase); you feed in a psite and it spits out a score. 
+
+
+IDEA: transfer learning
+- pretrain on large unlabelled dataset (get representation of proteins); then finetune with smaller labelled dataset.  but use same model obviously; it has 'seen' more info 
+
 ## TODO
 
 - retrieve from PSP instead of phosphoELM
 - apply cutoff for pLDDT score to remove "sequence motifs" from dataset 
-- retrieve embedding from modified residue (MODRES) to get a more comparable representation hopefully 
+- retrieve embedding from modified residue (`MOD_RSD`) to get a more comparable representation hopefully 
+- compare this with `RMSD` of the aligned motifs (with `MOD_RSD` of each enforced to be superimposed)
+- 
 - add more node features / edge features so that interactions can be seen by the algorithm more
 
 - use atom graphs, as opposed to residue and compare clusterings 
@@ -33,6 +69,11 @@ cat ../datasets/Phosphorylation_site_dataset | tail -n +5 | cut -f3 | sort | uni
 
 - idea from N Warren about using GAT somewhere?
 
+### Training 
+
+- unsupervised representation learning, apply clustering, no labels used 
+- supervised: use labels for classification task; THEN get embeddings (or then just run the model on ALL sites, known and unknown)
+- semi-supervised: allow clustering for unknown samples and classification for known samples (but together)
 
 ### Improvements
 - improve structure graph retrieval / storage to not exhaust our memory :( 
@@ -54,6 +95,10 @@ cat ../datasets/Phosphorylation_site_dataset | tail -n +5 | cut -f3 | sort | uni
 
 - take into account what the structure is like if other PTMs are present 
 - apply clustering to more PTMs
+
+
+- incorporate kinase structure (like when doing protein docking??)
+- look at GNN approaches in the literature that did docking type things; could actually incorporate all the known kinase structures AS WELL AS the phosphosites; and then get a score for each kinase from a GNN model (e.g. create residue- or atom- network graph, then the model has a representation of each kinase as well; and it gives a log-flattened score for each (e.g. .9 for one kinase, 0.01 for the others)
 
 
 ## Workflow 
