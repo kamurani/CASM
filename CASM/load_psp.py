@@ -16,7 +16,7 @@ import pickle
 from typing import Callable, List, Union
 
 
-from CASM.graph_loader import MotifLoader
+from CASM.graph_loader import MotifLoader, GraphDumper
 from CASM.utils.a import get_pdb_filename, is_list_of_str
 
 from subgraphs import get_motif_subgraph
@@ -148,12 +148,6 @@ def print_dataset_pdb_matches(
             print(output)
         
 
-def graph_dump(
-    filename: str, 
-    out_dir: Path, 
-    
-):
-    pass
 
 
 def get_graph_filename(
@@ -173,29 +167,7 @@ def get_graph_filename(
 
 
 
-class GraphDumper:
-    def __init__(
-        self,
-        out_dir,
-        method: str = "json", # method to use to represent the graph
 
-    ) -> None:
-        self.out_dir = out_dir,
-        self.method = method.lower(),
-
-    def dump(
-        self,
-        g: Union[nx.Graph, str], # allow multiple types of graphs to be dumped
-    ):
-
-        if self.method == "json":
-            pass 
-
-        if isinstance(g, (nx.Graph)):
-            pass  
-
-        #if isinstance(graph['graph'], (sg.StellarGraph, nx.Graph)):
-    
         
         
 @c.command()
@@ -225,7 +197,7 @@ class GraphDumper:
     "--ser",
     "--SER",
     "--Ser",
-    "s",
+    "S",
 
     is_flag=True,
 
@@ -236,7 +208,7 @@ class GraphDumper:
     "--THR",
     "--Thr",
     "--thr",    
-    "t",        # dest
+    "T",        # dest
     is_flag=True,
 
 )
@@ -246,7 +218,7 @@ class GraphDumper:
     "--tyr",
     "--Tyr",
     "--TYR",
-    "y",
+    "Y",
     is_flag=True,
 
 )
@@ -287,9 +259,9 @@ def main(
 
     # options
     organism,
-    s,
-    t,
-    y,
+    S,
+    T,
+    Y,
     
     ptm,
     radius,
@@ -316,12 +288,21 @@ def main(
         except:
             raise ValueError(f"Specified number of rows '{num_rows}' not an integer.")
 
+    # TODO: add more as needed. 
+    # TODO: use an actual 'residue' object? so we don't refer to it as just a string? 
+    all_residues = [
+        "S", 
+        "T", 
+        "Y",
+    ]
+
 
     residues = ""
-    if s: residues += 'S' 
-    if t: residues += 'T'
-    if y: residues += 'Y' 
+    for r in all_residues:
+        if eval(r): residues += r
 
+
+    print(f"CONSIDERING RESIDUES: {residues if residues else 'ALL'}")
 
     
 
@@ -407,13 +388,15 @@ def main(
     # Get graph loader
     from defaults import get_default_graph_config
     config = get_default_graph_config()
+
+
     loader = MotifLoader(
         config=config, 
         pdb_dir=pdb_dir, 
         radius=radius,
     )
 
-
+    
     dumper = GraphDumper(
         out_dir=out_dir,
     )
