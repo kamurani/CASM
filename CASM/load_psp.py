@@ -5,10 +5,7 @@ Agnostic as to how the structure was determined.  Simply receives a directory of
 
 """
 
-from distutils import extension
-from genericpath import isdir
-from multiprocessing.sharedctypes import Value
-from operator import inv
+
 import os
 from pathlib import Path
 import pdb
@@ -16,7 +13,7 @@ import pickle
 from typing import Callable, List, Union
 
 
-from CASM.graph_loader import MotifLoader, GraphDumper
+from CASM.graph_loader import MotifGenerator, GraphDumper, GraphLoader
 from CASM.utils.a import get_pdb_filename, is_list_of_str
 
 from subgraphs import get_motif_subgraph
@@ -147,9 +144,6 @@ def print_dataset_pdb_matches(
         if condition:
             print(output)
         
-
-
-
 def get_graph_filename(
     acc_id: str,
     mod_rsd: str,
@@ -162,7 +156,17 @@ def get_graph_filename(
 
 
 
+"""
+########################################################
 
+TODO 
+
+- more specific error messages for graph / subgraph creation failure
+
+
+
+########################################################
+"""
 
 
 
@@ -244,6 +248,17 @@ def get_graph_filename(
     type=c.STRING, 
 )
 @c.option(
+    "--plddt",
+    "--pLDDT",
+    "plddt",
+    help="Threshold pLDDT score for constructing a motif graph.  By default, only motifs with a modified residue of > 70 pLDDT are considered.",
+
+    type=c.INT,
+    default=70,
+    show_default=True,
+    
+)
+@c.option(
     "--show-matches",
     is_flag=True, 
 )
@@ -251,6 +266,17 @@ def get_graph_filename(
     "--force",
     help="Override existing files", 
     is_flag=True, 
+)
+@c.option(
+    "--skip/--no-skip",
+    "skip",
+    help="Skip graph creation if one with the same filename already exists in `OUT_DIR`.", 
+    default=True,
+    show_default=True,
+)
+@c.option(
+    "--stats",
+    is_flag=True,
 )
 def main(
     ptm_dataset,
@@ -267,9 +293,13 @@ def main(
     radius,
 
     num_rows,
-    show_matches, 
+    plddt,
 
+    show_matches, 
     force, 
+    skip,
+
+    stats,
 ):
 
     """TODO: prompt user for confirming output directory, filename scheme, etc. before continuing"""
@@ -295,15 +325,13 @@ def main(
         "T", 
         "Y",
     ]
-
-
     residues = ""
     for r in all_residues:
         if eval(r): residues += r
 
 
     print(f"CONSIDERING RESIDUES: {residues if residues else 'ALL'}")
-
+    print(f"pLDDT threshold: {plddt}")
     
 
     df: pd.DataFrame = load_psp_list(ptm_dataset)
@@ -341,7 +369,6 @@ def main(
 
     if show_matches: 
         
-
         df = df.drop_duplicates(subset='ACC_ID', keep='first')
         print_dataset_pdb_matches(
             df=df,
@@ -380,6 +407,7 @@ def main(
 
     else: 
         pass
+
         with filepath.open("w", encoding="utf-8") as f:
             
             pickle.dump(g_dict, f)
@@ -390,19 +418,95 @@ def main(
     config = get_default_graph_config()
 
 
-    loader = MotifLoader(
+    loader = MotifGenerator(
         config=config, 
         pdb_dir=pdb_dir, 
         radius=radius,
+        plddt=plddt,
+
+        verbose=True,
     )
 
-    
     dumper = GraphDumper(
         out_dir=out_dir,
+        method="pickle",
+        overwrite=False,
     )
-
-
+    
     df_dict = df.to_dict('records')
+    num_failed = 0
+    num_skipped = 0
+
+    if stats: 
+
+        from Bio.PDB import PDBParser
+        parser = PDBParser()
+
+        for row in df_dict:
+            acc_id      = row["ACC_ID"]
+            mod_rsd_id  = row["MOD_RSD_ID"]
+            mod_rsd     = row["MOD_RSD_POS"]
+            mod_rsd_ptm = row["MOD_RSD_PTM"]
+
+            org = row["ORGANISM"]
+
+
+            
+
+            p = Path(pdb_dir) 
+            p = p / get_pdb_filename(acc_id=acc_id, file_extension="pdb")
+            p = p.resolve() # get absolute path
+            fp = str(p)
+
+            try: 
+                structure = parser.get_structure(f"{acc_id}_{mod_rsd}", fp)
+            except:
+                structure = None
+
+            if structure:
+
+                model = structure[0]
+                chain = model['A']
+
+                res = mod_rsd_id.split(':')
+                #print(f"RES: {res[1]} {res[2]}\tPDB_RES: {chain[int(res[2])]}")
+                try:
+                    residue = chain[int(res[2])]
+                    if residue.has_id("CA"):
+                        ca = residue["CA"]
+                        #if ca.get_bfactor() > 50.0:
+                        table = [
+                            acc_id, 
+                            mod_rsd,
+                            str(ca.get_bfactor()),
+                            org,
+                        ]
+                        print('\t'.join(table))
+                except:
+                    print("CANNOT ACCESS RESIDUE")
+                
+                continue
+                # Print B_factor 
+                for model in structure.get_list():
+                    for chain in model.get_list():
+                        for residue in chain.get_list():
+                            if residue.has_id("CA"):
+                                ca = residue["CA"]
+                                #if ca.get_bfactor() > 50.0:
+                                table = [
+                                    acc_id, 
+                                    mod_rsd,
+                                    str(ca.get_bfactor()),
+                                    org,
+                                ]
+                                print('\t'.join(table))
+
+
+            else:
+                print(f"NO STRUCTURE {acc_id}")
+
+        return
+    
 
     for row in tqdm(df_dict):
         
@@ -421,12 +525,23 @@ def main(
 
         #print(g_out_path)
 
+        # Don't bother if graph already exists 
+        if os.path.exists(dumper._get_filepath(acc_id, mod_rsd_id)) and skip:
+            print(f"Skipping {'@'.join([acc_id, mod_rsd])} ...")
+            num_skipped += 1
+            continue 
+
         """Create subgraph, dump subgraph"""
 
         g: nx.Graph = loader.get_motif(acc_id, mod_rsd_id)     
 
+        if g is None: num_failed += 1
+        dumper(g)
+
+
         g_dict = {
             "graph": g, 
+            "mod_rsd": mod_rsd_id,
             "kinase": "UNKNOWN",
         }
 
