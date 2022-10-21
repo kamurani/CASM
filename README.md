@@ -11,6 +11,10 @@ Currently using Phosphosite structural motifs for *Mus musculus* and *Homo sapie
 Predicted AF2 PDB structures for Swiss-Prot database download [here](https://ftp.ebi.ac.uk/pub/databases/alphafold/latest/swissprot_pdb_v3.tar) (542,380 predicted structures)
 
 
+## TODO
+
+- use GraphSAGE for representation learning of all nodes in structural motifs 
+- use embeddings from psite nodes to do clustering / classification learning? 
 
 
 
