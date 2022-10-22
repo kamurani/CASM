@@ -30,6 +30,10 @@ QUESTIONS:
     - SEMIsupervised: incorporate clustering somehow (so takes into account separation / dissimilarity of substrate protein structure at psite; AND kinase labels )
 
     - label with kinase superset i.e. family? instead of specific ID
+
+
+    - apply 'clustering' to shift around the points that were pre-calculated from supervised learning ? or vice versa?
+    - i.e. use one approach to get rough embeddings; then 'nudge' the embeddings using the other method.
 """
 
 
