@@ -27,6 +27,17 @@ PSP dataset
 cat ../datasets/Phosphorylation_site_dataset | tail -n +5 | cut -f3 | sort | uniq | wc -l 
 ```
 
+### Kinases
+
+AlphaFill `.cif` files: ATP binding site predictions
+
+```
+grep -E 'ATP\s[[:alnum:]]+\sPG' *.cif 
+
+grep -E 'ATP\s[[:alnum:]]+\sPG' *.cif  | cut -d':' -f1 | sort | uniq | wc -l
+```
+
+
 
 Setup 
 
