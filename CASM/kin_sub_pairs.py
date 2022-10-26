@@ -30,7 +30,7 @@ CLUSTERING
 
 """
 
-
+from CASM.kinase.kinase import AlphaFillLoader
 
 from typing import Dict
 import click as c
