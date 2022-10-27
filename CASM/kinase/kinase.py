@@ -116,7 +116,7 @@ class AlphaFillLoader():
         asym_id: 
         rmsd:
     """
-    def get_asym_id_lowest_rmsd(
+    def get_asym_id_hits(
         self,
         acc_id: str, 
         molecule: str = "ATP",
@@ -133,10 +133,13 @@ class AlphaFillLoader():
 
             data = json.load(f)
 
+
             # OK, let's attack this JSON and find the lowest RMSD for our molecule
-
-            hits: list = data['hits']
-
+            
+            try: 
+                hits: list = data['hits']
+            except:
+                return None
 
             # Get all hits for our molecule    
             candidates = []
@@ -157,7 +160,7 @@ class AlphaFillLoader():
             c_list = sorted(candidates, key=lambda d: d['rmsd'])
 
             # Return object with lowest RMSD
-            return c_list[0]
+            return c_list
 
 
     """
@@ -196,7 +199,7 @@ class AlphaFillLoader():
         acc_id: Union[str, List[str]],
         
 
-        rmsd_threshold: float = 6.0, # Ignore any data that has RMSD above this value
+        rmsd_threshold: float = 6.0, # Ignore any data that has RMSD above this value # TODO
 
         label_asym_id: str = None,      # This needs to be specified if there are multiple transplants of same molecule 
                                         # By default this will use the metadata in same ``cif_dir`` directory from AlphaFill
@@ -215,10 +218,15 @@ class AlphaFillLoader():
             if not label_asym_id:
 
                 # try / except here TODO
+                try:
+                    hits = self.get_asym_id_hits(acc_id=acc_id, molecule=label_comp_id)
 
-                data: dict = self.get_asym_id_lowest_rmsd(acc_id=acc_id, molecule=label_comp_id)
-                label_asym_id = data['asym_id']
+                    data: dict = hits[0]
 
+                    label_asym_id   = data['asym_id']
+                    rmsd            = data['rmsd']
+                except:
+                    return dict(coords=None, rmsd=-1)
 
             # Parse CIF file
             doc = cif.read_file(fn_cif)
@@ -234,37 +242,57 @@ class AlphaFillLoader():
             query = [type_symbol, label_atom_id, label_comp_id, label_asym_id]
             # TODO more elegant way of checking row match?
 
+
+            # TODO: get ALL molecules (e.g. all ATPs), and then keep them in a list along with 
+
+
             # iterate through rows
-            output = None
+            coords = {}
             for row in table:
                 
                 if (
                     row["_atom_site.type_symbol"]   == type_symbol      and
                     row["_atom_site.label_atom_id"] == label_atom_id    and
-                    row["_atom_site.label_comp_id"] == label_comp_id    and
-                    row["_atom_site.label_asym_id"] == label_asym_id
+                    row["_atom_site.label_comp_id"] == label_comp_id    #and
+                    #row["_atom_site.label_asym_id"] == label_asym_id
+
+
+                    # TODO: take into account missing PG atom (i.e. ATP analogue without phosphate group; still use
+                    # a diff atom's coordinates?)
                 ):
 
-                    output = (
+                    # Save match, indexing using ASYM ID
+                    coords[row["_atom_site.label_asym_id"]] = (
                         row["_atom_site.Cartn_x"],
                         row["_atom_site.Cartn_y"],
                         row["_atom_site.Cartn_z"],
                     )
 
             # no match
-            if not output: raise Exception(f"No element found for query: {query}")
-
-            return output
-
-
-        for e in block.find_loop("_atom_site.label_atom_id"):
-            print(e)
-
+            
+            if not coords: 
+                if self.verbose: print(f"No element found for query: {query}")#raise Exception(f"No element found for query: {query}")
+                
         
 
-        (x,y,z) = (0,0,0)
-        print(f"{acc_id}\t{x}\t{y}\t{z}")
-        
+            
+            # Select lowest RMSD. (or lowest that works at least.)
+            # i.e. go through hits in ascending rmsd order, until we find one that has coords
+            for h in hits:
+                asym_id = h['asym_id']
+                if asym_id in coords: 
+                    return dict(
+                        coords=coords[asym_id], 
+                        rmsd=rmsd, label_atom_id=label_atom_id,
+                        label_comp_id=label_comp_id,
+                        label_asym_id=label_asym_id,
+                    )
+
+
+            # Failed
+            return dict(coords=None, rmsd=-1)        
+
+       
 
 """
 Download 
@@ -312,7 +340,7 @@ def main(
 
     #acc_ids = ["Q9UHD2", "Q9WTU6"]
 
-    acc_ids = ["Q96PY6"]
+    #acc_ids = ["Q96PY6"] # TODO: for some reason, this alphafill CIF file doesn't have all the atoms for ATP 'Y' ??
 
     # Alphafill
     loader = AlphaFillLoader(
@@ -325,15 +353,21 @@ def main(
 
     for acc_id in acc_ids:
 
-        
-        (x, y, z) = loader.get_coordinates(
-            acc_id=acc_id,
-        )
-
-        l = [acc_id, x, y, z]
-
         try:
-            pass  
+            
+            data = loader.get_coordinates(
+                acc_id=acc_id,
+            )
+            (x, y, z)   = data['coords']
+            rmsd        = data['rmsd']
+
+            molecule    = data["label_comp_id"]
+            asym_id     = data["label_asym_id"]
+            atom_id     = data["label_atom_id"]
+            l = [acc_id, rmsd, atom_id, molecule, asym_id, x, y, z, ]
+
+        #try:
+        #    pass  
         except:
 
             l = [acc_id, 'UNKNOWN']

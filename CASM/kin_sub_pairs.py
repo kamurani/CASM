@@ -80,6 +80,35 @@ def get_plddt_dict(
                
     return d
 
+"""
+Creates dictionary for kinase ATP binding site coordinate lookup
+"""
+def get_atp_site_dict(
+    filename: str,
+):
+    with open(filename) as f:
+
+        tsv_file = csv.reader(f, delimiter="\t")
+
+        d = {}
+        for line in tsv_file:
+            
+            acc = line[0]
+            try:
+                rmsd, atom, ligand, asym_id, x, y, z = line[1:8]
+                coords = (x, y, z)
+            except: 
+                # UNKNOWN
+                rmsd = -1
+                coords = None 
+
+            data = dict(
+                rmsd=float(rmsd),
+                coords=coords,
+            )
+            d[acc] = data
+               
+    return d
 
 
 @c.command()
@@ -91,9 +120,19 @@ def get_plddt_dict(
     'PLDDT_DATASET', nargs=1,
     type=c.Path(exists=True, file_okay=True, dir_okay=False),
 )
+@c.argument(
+    'ATP_SITE_DATASET', nargs=1,
+    type=c.Path(exists=True, file_okay=True, dir_okay=False),
+)
+@c.argument(
+    'ALPHAFILL_DIR', nargs=1,
+    type=c.Path(exists=True, file_okay=False, dir_okay=True),
+)
 def main(
     kin_sub_dataset,
     plddt_dataset,
+    atp_site_dataset,
+    alphafill_dir,
 ):
     print(kin_sub_dataset)
     df: pd.DataFrame = load_kin_sub_list(kin_sub_dataset)
@@ -130,23 +169,31 @@ def main(
     func = get_filter_func(get_plddt_dict(filename=plddt_dataset))
 
     d = get_plddt_dict(filename=plddt_dataset)
+    kinase_atp_sites: dict = get_atp_site_dict(filename=atp_site_dataset)
+
+
     #df['SUB_MOD_PLDDT'] = df.apply(lambda row: d.get(row["SUB_ACC_ID"], {}).get(row["SUB_MOD_RSD"], {}).get("plddt", "UNKNOWN"), axis=1)
     df['SUB_MOD_PLDDT'] = df.apply(func, axis=1)
     df['SUB_MOD_PLDDT'] = df['SUB_MOD_PLDDT'].astype(float)
 
-    plddt_threshold = 60
-    dff = df
-    dff = dff.loc[dff["SUB_MOD_PLDDT"] >= plddt_threshold]
-
-
-    print(df[["KIN_ACC_ID", "KINASE", "SUB_ACC_ID", "SUB_MOD_RSD", "SUB_MOD_PLDDT"]])
-    print(dff)
+    
     
     
     
     # join rmsd of atp coord prediction for kinase
-    #df['KIN_ATP_LOC_RMSD'] = 
+    loader = AlphaFillLoader(
+        verbose=False,
+        cif_dir=alphafill_dir,
+    )
     
+    # Realtime way using ``loader``
+    #df['KIN_ATP_LOC_RMSD'] = df.apply(lambda row: loader.get_coordinates(row['KIN_ACC_ID']).get('rmsd', -1) if loader.get_coordinates(row['KIN_ACC_ID']) else -1, axis=1)
+    
+    # Using file instead...
+    df['KIN_ATP_LOC_RMSD'] = df.apply(lambda row: kinase_atp_sites.get(row["KIN_ACC_ID"], dict(rmsd=-1)).get('rmsd'), axis=1)
+    df['KIN_ATP_LOC_RMSD'] = df['KIN_ATP_LOC_RMSD'].astype(float)
+
+
 
     # see all kinases for same site; join kinase family; join kinase super / sub families 
 
@@ -154,7 +201,20 @@ def main(
 
     # sanity check this, then make a negative example generator 
 
+    # FILTERING
 
+    mod_rsd_plddt_threshold: float  = 60
+    kin_atp_rmsd_threshold: float   = 2.0
+    dff = df
+
+    dff = dff.loc[dff["SUB_MOD_PLDDT"] >= mod_rsd_plddt_threshold]      # phosphosite in AF2 model has pLDDT score >= threshold 
+    dff = dff.loc[dff["KIN_ATP_LOC_RMSD"] >= -1]                        # kinase ATP location is known (``-1`` is error value)
+    dff = dff.loc[dff["KIN_ATP_LOC_RMSD"] <= kin_atp_rmsd_threshold ]   # kinase ATP location prediction is above threshold RMSD (AlphaFill model local backbone)
+
+
+    # Selected fields for printing and sanity checking
+    print(df[["KIN_ACC_ID", "KINASE", "SUB_ACC_ID", "SUB_MOD_RSD", "SUB_MOD_PLDDT", "KIN_ATP_LOC_RMSD"]])
+    print(dff)
 
 
     # THEN:
