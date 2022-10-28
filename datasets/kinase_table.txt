@@ -1,4 +1,4 @@
-xName 	Manning Name 	HGNC Name 	Kinase Name 	Group 	Family 	SubFamily 	UniprotID
+xName	Manning Name	HGNC Name	Kinase Name	Group	Family	SubFamily	UniprotID
 smMLCK 	smMLCK 	MYLK 	Myosin light chain kinase 	CAMK 	MLCK 		Q15746
 skMLCK 	skMLCK 	MYLK2 	Myosin light chain kinase 2 	CAMK 	MLCK 		Q9H1R3
 p70S6Kb 	p70S6Kb 	RPS6KB2 	Ribosomal protein S6 kinase beta-2 	AGC 	RSK 	RSKp70 	Q9UBS0
