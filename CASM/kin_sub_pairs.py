@@ -242,6 +242,8 @@ def main(
 
     MATRIX = get_distance_matrix(filepath=kinase_tree, kinase_table=kinase_table)
 
+    
+
     """
     Get furthest ``n`` kinases away from current kinase.  
 
@@ -250,6 +252,7 @@ def main(
     def _get_furthest_kinases_single(
         acc_id: str, 
         n: int,
+        
     ):
         if acc_id not in MATRIX:
             return []
@@ -265,6 +268,7 @@ def main(
     def get_furthest_kinases(
         acc_id: Union[str, List[str]],
         n: int, 
+        output_type: str = "UniprotID",
 
     ):
         output = [] 
@@ -273,29 +277,57 @@ def main(
 
         
         for i in acc_id: 
+            
+            output += _get_furthest_kinases_single(i, n=n)
+            output = list(set(output))
 
-            output = list(set(output + _get_furthest_kinases_single(i, n=n)))
-
+        output = [d[o][output_type] for o in output]
+        return output
 
     
 
 
 
         
+    """
+    Get unique members of a set when given a list of kinase id's
+    """
+    def kin_list_tr(
+        kin: List[str], # list of UniprotIDs for kinases
+        to: str = "Group", 
+    ):
+        groups = []
+        for k in kin: 
+            if k in d: 
+                addition = d[k][to]
+            else: 
+                addition = "UNKNOWN"
+            groups.append(addition)
+
+        return list(set(groups))
 
 
-        
 
-
-
-    N = 20
+    N = 40
 
     # For now, just use the first kinase in list.   
     # TODO: see what happens if we do all of them, then get set of returned list (unique kinases)
-    df['FURTHEST_KINASES'] = df.apply(lambda row: get_furthest_kinases(list(row['KIN_ACC_ID']), n=N), axis=1)
+    #df['FURTHEST_KINASES'] = df.apply(lambda row: get_furthest_kinases(list(row['KIN_ACC_ID']), n=N), axis=1)
     
+    df['NUM_FURTHEST_KINASES'] = df.apply(lambda row: len(get_furthest_kinases(list(row['KIN_ACC_ID']), n=N)), axis=1) 
+
+    df['KINASE_GROUPS'] = df.apply(lambda row: kin_list_tr(list(row['KIN_ACC_ID']), to="Group"),  axis=1) 
+
+    df['FURTHEST_KINASE_GROUP'] = df.apply(lambda row: set(get_furthest_kinases(list(row['KIN_ACC_ID']), n=N, output_type="Group")), axis=1)
+    
+    df["OVERLAP"] = df.apply(lambda row: list(set(row['FURTHEST_KINASE_GROUP']) & set(row['KINASE_GROUPS'])), axis=1)
+
     df = df.sort_values(['NUM_KINASES'], ascending=False)
 
+    #df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "KINASE_GROUPS","FURTHEST_KINASE_GROUP"]]
+    df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "OVERLAP"]]
+
+    #df.to_csv("df_dump.csv", sep="\t", index=True)
     df.to_csv("df_dump.csv", sep="\t", index=True)
 
 
