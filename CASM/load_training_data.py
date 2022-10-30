@@ -22,11 +22,27 @@ warnings.filterwarnings("ignore")
 
 import torch
 from graphein.ml import ProteinGraphDataset
+from graphein.ml.conversion import GraphFormatConvertor
 import graphein.protein as gp
 
+###
 
-acc_ids = list(set(substrates+kinases))
+from CASM.kin_sub_pairs import get_filtered_dataset
 
+fp = "../datasets/Kinase_Substrate_Dataset"
+df = get_filtered_dataset(
+    path_to_dataset=fp
+)
+
+#print(df)
+
+kinases = df.KIN_ACC_ID.unique()
+substrates = df.SUB_ACC_ID.unique()
+
+acc_ids = list(kinases) + list(substrates)
+
+
+print(f"Length: {len(acc_ids)}")
 
 chain = 'A'
 chain_selection_map = {}
@@ -46,7 +62,7 @@ def filter_func(data: torch_geometric.data.Data):
 
 
 radius = 10.0
-def get_subgraph(g: nx.Graph)
+def get_subgraph(g: nx.Graph):
 
 
     # TODO: 
@@ -61,12 +77,12 @@ ds = ProteinGraphDataset(
     #graph_label_map=g_lab_map, # NO LABELS FOR NOW
     #node_label_map=node_lab_map,
 
-    chain_selection_map=chain_selection_map,
+    #chain_selection_map=chain_selection_map,
     graphein_config=protein_graph_config,
 
     graph_transformation_funcs=[get_subgraph],
 
-    graph_format_convertor: GraphFormatConvertor = GraphFormatConvertor(
+    graph_format_convertor=GraphFormatConvertor(
             src_format="nx", dst_format="pyg"
         ),
 
