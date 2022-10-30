@@ -239,7 +239,6 @@ def main(
     df['NUM_KINASES'] = df.apply(lambda row: len(set(row['KIN_GROUP_NAME'])), axis=1)
     df['KIN_XNAME'] = df.apply(lambda row: [d[k]["xName"] if k in d else "UNKNOWN" for k in list(row['KIN_ACC_ID'])], axis=1)
 
-
     MATRIX = get_distance_matrix(filepath=kinase_tree, kinase_table=kinase_table)
 
     
@@ -269,20 +268,47 @@ def main(
         acc_id: Union[str, List[str]],
         n: int, 
         output_type: str = "UniprotID",
+        no_overlap: str = None, # Remove any kinases from the output that have ``Group`` in common with input kinases. 
 
     ):
-        output = [] 
+        furthest_kin = [] 
         if type(acc_id) == str:
-            acc_id = [str]
+            acc_id = [acc_id]
 
-        
         for i in acc_id: 
             
-            output += _get_furthest_kinases_single(i, n=n)
-            output = list(set(output))
+            furthest_kin += _get_furthest_kinases_single(i, n=n)
+            furthest_kin = list(set(furthest_kin))
 
-        output = [d[o][output_type] for o in output]
+        if not no_overlap:
+
+            output = [d[k][output_type] for k in furthest_kin]
+            return output
+        
+        kin_classifications = kin_list_tr(acc_id, to="Family")
+
+        # Classifications of input kinase(s)
+        classification = no_overlap 
+        in_kin_class = kin_list_tr(kin=acc_id, to=classification) # all unique groups that appear 
+
+        #print(acc_id, in_kin_class)
+        no_overlap_output = []
+        for k in furthest_kin:
+            if d[k][classification] not in in_kin_class:
+                no_overlap_output.append(k)
+            
+        # Assert that there are no overlapping KINASES in the groups, i.e. 
+        # if we've filtered for overlapping families, then there DEFINITELY shouldn't be overlapping kinases!
+        for k in acc_id: 
+            assert k not in no_overlap_output, f"{k} which is in {classification} {d[k][classification]}, is in {sorted(furthest_kin)}"
+
+        output = [d[o][output_type] for o in no_overlap_output]
         return output
+        
+        
+        # TODO: ignore "other" classificaton?
+
+        
 
     
 
@@ -310,9 +336,15 @@ def main(
 
     N = 40
 
+
+    
+
+
+    # TODO: use families instead of groups for checking overlap?
+
     # For now, just use the first kinase in list.   
     # TODO: see what happens if we do all of them, then get set of returned list (unique kinases)
-    #df['FURTHEST_KINASES'] = df.apply(lambda row: get_furthest_kinases(list(row['KIN_ACC_ID']), n=N), axis=1)
+    df['FURTHEST_KINASES'] = df.apply(lambda row: get_furthest_kinases(list(row['KIN_ACC_ID']), n=N), axis=1)
     
     df['NUM_FURTHEST_KINASES'] = df.apply(lambda row: len(get_furthest_kinases(list(row['KIN_ACC_ID']), n=N)), axis=1) 
 
@@ -320,19 +352,30 @@ def main(
 
     df['FURTHEST_KINASE_GROUP'] = df.apply(lambda row: set(get_furthest_kinases(list(row['KIN_ACC_ID']), n=N, output_type="Group")), axis=1)
     
-    df["OVERLAP"] = df.apply(lambda row: list(set(row['FURTHEST_KINASE_GROUP']) & set(row['KINASE_GROUPS'])), axis=1)
+    df["OVERLAP_GROUP"] = df.apply(lambda row: list(set(row['FURTHEST_KINASE_GROUP']) & set(row['KINASE_GROUPS'])), axis=1)
+
+    df["OVERLAP_KINASE"] = df.apply(lambda row: list(set(row['FURTHEST_KINASES']) & set(row['KIN_ACC_ID'])), axis=1)
+
+
+    df["FURTHEST_KIN_NO_OVERLAP_FAMILY"] = df.apply(lambda row: get_furthest_kinases(row['KIN_ACC_ID'], n=N, output_type="UniprotID", no_overlap="Family"), axis=1)
 
     df = df.sort_values(['NUM_KINASES'], ascending=False)
 
     #df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "KINASE_GROUPS","FURTHEST_KINASE_GROUP"]]
-    df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "OVERLAP"]]
-
+    #df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "OVERLAP_KINASE"]]
+    df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "FURTHEST_KIN_NO_OVERLAP_FAMILY"]]
     #df.to_csv("df_dump.csv", sep="\t", index=True)
     df.to_csv("df_dump.csv", sep="\t", index=True)
 
 
 
     return
+
+
+    """
+    Return top N furthest away kinases based on tree; that do not have any ``Family`` in common with any kinases 
+    known to phosphorylate this site. 
+    """
 
 
     # see all kinases for same site; join kinase family; join kinase super / sub families 
