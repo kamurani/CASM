@@ -130,3 +130,15 @@ test_dataloader = DataLoader(test_data, batch_size=batch_size, num_workers=num_w
 def train(model, device, train_dataloader, optimizer, epoch):
 
     pass
+
+
+
+"""
+TODO: visualise predictions / embeddings by using heatmap 
+
+kinase x substrate matrix; see predicted values (coloured by confidence 0..1)
+
+compare to ground truth: see if any new ones get added? (ground truth includes "negative examples" fed for training; "unknown" colour (gray) for everything else)
+
+see if ground truth is a subset of predictions? (should be, if model has learnt training)
+"""
