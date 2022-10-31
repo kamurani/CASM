@@ -400,30 +400,34 @@ class KinaseSubstrateDataset(Dataset):
         if self.pdb_transform:
             self.transform_pdbs()
 
+        # TODO: check if files exist before processing. 
+        # add overwrite option. 
+        # i.e. don't reload entire dataset if ``to_process`` is empty list. 
+
+
         """
         Kinase
         """
         d = self.kinase_metadata_dict
        
 
+
         # Generate graphs for kinases 
         for kin in self.kinases:
-            
-            coords: tuple = d[kin]['coords']
-
-            (x, y, z) = coords 
-            coords = (float(x), float(y), float(z))
-            (x, y, z) = coords 
-            print(type(x))
-
-            g = construct_graph(
-                pdb_path=f"{self.raw_dir}/{kin}.pdb",
-                config=self.config,
-            )
+                
             try:
+                coords: tuple = d[kin]['coords']
+
+                (x, y, z) = coords 
+                coords = (float(x), float(y), float(z))
+                (x, y, z) = coords 
+                g = construct_graph(
+                    pdb_path=f"{self.raw_dir}/{kin}.pdb",
+                    config=self.config,
+                )
                 g = get_kinase_subgraph(g, coords)
             except:
-                print(f"coords: {coords}")
+                print(f"[KINASE] Failed to process {kin}")
                 continue
 
             g = self.graph_format_convertor(g)
@@ -437,15 +441,19 @@ class KinaseSubstrateDataset(Dataset):
         for sub, mod_rsd in zip(
             self.df.SUB_ACC_ID, self.df.SUB_MOD_RSD
         ):
-            # get graph
-            g = construct_graph(
-                pdb_path=f"{self.raw_dir}/{k}.pdb",
-                config=self.config,
-            )
-            node_id = convert_mod_rsd(mod_rsd)
-            
-            g = get_motif_subgraph(g, mod_rsd=node_id)
-            g = self.graph_format_convertor(g)
+            try:
+                # get graph
+                g = construct_graph(
+                    pdb_path=f"{self.raw_dir}/{sub}.pdb",
+                    config=self.config,
+                )
+                node_id = convert_mod_rsd(mod_rsd)
+                
+                g = get_motif_subgraph(g, mod_rsd=node_id)
+                g = self.graph_format_convertor(g)
+            except:
+                print(f"[SUBSTRATE] Failed to process {sub} {mod_rsd}")
+                continue
 
             fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt")
             torch.save(g, fp)
