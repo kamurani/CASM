@@ -34,6 +34,11 @@ QUESTIONS:
 
     - apply 'clustering' to shift around the points that were pre-calculated from supervised learning ? or vice versa?
     - i.e. use one approach to get rough embeddings; then 'nudge' the embeddings using the other method.
+
+
+    - for 'autoencoder' component with encoder / decoder, the target output doesn't need to be all the node features etc. 
+    - it only needs to contain each amino acid (could be 1-hot encoding); as a way to go from a vector to a graph correctly.  we only need the adjacency matrix,
+    edge distances, and which AA. 
 """
 
 
@@ -95,4 +100,33 @@ Sub
 protein id known, 
 """
 
-# s
+
+
+import torch
+from torch.utils.data import DataLoader, random_split
+
+import math
+
+from CASM.load_training_data import dataset
+
+size = len(dataset)
+train_ratio = 0.8
+
+batch_size = 4 # 64?
+num_workers = 0
+
+
+# Train / test split
+training_data, test_data = random_split(dataset, [math.floor(train_ratio * size), size - math.floor(train_ratio * size)])
+
+# Kinase / substrate dataset 
+train_dataloader = DataLoader(training_data, batch_size=batch_size, num_workers=num_workers, shuffle=True)
+test_dataloader = DataLoader(test_data, batch_size=batch_size, num_workers=num_workers, shuffle=True)
+
+
+# TODO: validation data loader
+
+
+def train(model, device, train_dataloader, optimizer, epoch):
+
+    pass
