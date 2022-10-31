@@ -142,10 +142,10 @@ class KinaseSubstrateDataset(Dataset):
 
         """""""""""""""""""""""""""""""""""""""""" 
         self.name = name
+        self.df = df
 
 
 
-        
         """
         Create ``data_list`` using dataframe 
         """
@@ -166,11 +166,7 @@ class KinaseSubstrateDataset(Dataset):
         # have to download pdb files for self.structures; but have to create graphs separately for sub / kin
         self.structures = self.substrates + self.kinases
 
-
-
         self.pairs = [] 
-
-        # TODO generate pairs 
 
         df2: dict = dict([((sub, mod_rsd), (pos, neg)) for sub, mod_rsd, pos, neg in zip(df.SUB_ACC_ID, df.SUB_MOD_RSD, df.KIN_ACC_ID, df.NEG_KIN_ACC_ID) ])
 
@@ -273,15 +269,22 @@ class KinaseSubstrateDataset(Dataset):
     @property
     def processed_file_names(self) -> List[str]:
         """Names of processed files to look for"""
-        if self.chain_selection_map is not None:
-            return [
-                f"{pdb}_{chain}.pt"
-                for pdb, chain in zip(
-                    self.structures, self.chain_selection_map.values()
-                )
-            ]
-        else:
-            return [f"{pdb}.pt" for pdb in self.structures]
+        # TODO: consider adding chain ID to filename if this is variable? for now just using 'A'
+        
+        kinases = [
+            f"KIN_{kin}.pt"
+            for kin in self.kinases
+        ]
+        substrates = [
+            f"SUB_{sub}_{mod_rsd}.pt"
+            for sub, mod_rsd in zip(
+                self.df.SUB_ACC_ID, self.df.SUB_MOD_RSD
+            ) 
+        ]
+        print(f"kinases: {kinases[0:10]}") 
+        print(f"substrates: {substrates[0:10]}")
+        return kinases + substrates
+        
 
     def validate_input(self):
         if self.graph_label_map is not None:
