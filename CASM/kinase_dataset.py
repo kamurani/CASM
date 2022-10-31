@@ -404,21 +404,20 @@ class KinaseSubstrateDataset(Dataset):
         Kinase
         """
         d = self.kinase_metadata_dict
-
-        a = convert_mod_rsd("S210")
-        print(a)
-        exit(1)
+       
 
         # Generate graphs for kinases 
-        for k in self.kinases:
+        for kin in self.kinases:
             
-            coords: tuple = d[k]['coords']
+            coords: tuple = d[kin]['coords']
 
             g = construct_graph(
-                pdb_path=f"{self.raw_dir}/{k}.pdb",
+                pdb_path=f"{self.raw_dir}/{kin}.pdb",
                 config=self.config,
             )
             g = get_kinase_subgraph(g, coords)
+            fp = os.path.join(self.processed_dir, f"KIN_{kin}.pt"),
+            torch.save(g, fp)
 
             # TODO: wrap in try / except so it will run, remove from dataset after
 
@@ -432,9 +431,9 @@ class KinaseSubstrateDataset(Dataset):
                 pdb_path=f"{self.raw_dir}/{k}.pdb",
                 config=self.config,
             )
-            mod_rsd = None #TODO convert to node id
+            node_id = convert_mod_rsd(mod_rsd)
             
-            g = get_motif_subgraph(g, mod_rsd=mod_rsd)
+            g = get_motif_subgraph(g, mod_rsd=node_id)
             g = self.graph_format_convertor(g)
 
             fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt"),
