@@ -41,9 +41,30 @@ from tqdm import tqdm
 from definitions import GRAPH_NODE_FEATURES
 from subgraphs import get_motif_subgraph
 
+"""
+Convert; no PTM on end
+"""
+def convert_mod_rsd(
+    mod_rsd: str, 
+    chain_id: str = 'A', # TODO by default, assume that we are using AF2 i.e. always one chain, no multimeric proteins. 
+) -> str:
 
+    # {RES}{POS}
+    p = re.compile("([a-zA-Z]{1})([0-9]+)")
+    
+    match = p.search(mod_rsd)
+    res = aa1to3(match.group(1))
+    pos = match.group(2)
+    try:
+        return ':'.join([chain_id, res, pos])
+    except:
+        raise ValueError(f"{mod_rsd} not in valid MOD_RSD format")
 
+"""
+Convert to a node ID 
 
+Given ``mod_rsd`` has a PTM 
+"""
 def mod_rsd2node_id(
     mod_rsd: str, 
     chain_id: str = 'A', # TODO by default, assume that we are using AF2 i.e. always one chain, no multimeric proteins. 
@@ -432,7 +453,7 @@ def main(
         method="pickle",
         overwrite=False,
     )
-    
+
     df_dict = df.to_dict('records')
     num_failed = 0
     num_skipped = 0
@@ -508,6 +529,10 @@ def main(
         return
     
 
+
+
+    # Not running stats
+    
     for row in tqdm(df_dict):
         
         acc_id      = row["ACC_ID"]
