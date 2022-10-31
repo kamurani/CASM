@@ -30,6 +30,30 @@ CLUSTERING
 
 """
 
+
+
+"""
+DATASET PATHS
+"""
+import os 
+
+dataset_dir = "../datasets"
+
+KIN_SUB_DATASET     = os.path.join(dataset_dir, "Kinase_Substrate_Dataset") 
+SUB_PLDDT           = os.path.join(dataset_dir, "Human_psite_plddt_all.tsv")
+KIN_ATP_COORDS_RMSD = os.path.join(dataset_dir, "KIN_ATP_SITE.tsv")             # All known kinase ATP predicted sites
+
+ALPHAFILL_DIR       = "../../DATA/ALPHAFILL/KINASES"
+
+KINOME_TREE         = os.path.join(dataset_dir, "ePK.ph")
+KIN_TABLE           = os.path.join(dataset_dir, "kinase_table.txt")
+
+
+
+"""
+IMPORTS
+"""
+
 from CASM.kinase.kinase import AlphaFillLoader
 from CASM.load_tree import get_distance_matrix, get_kinase_name_map
 
@@ -39,6 +63,22 @@ import pandas as pd
 
 import csv
 
+
+
+"""
+Kinase ATP coordinates lookup
+"""
+def get_kin_atp_dict(
+    filename: str, 
+) -> Dict[str, Tuple[float]]:
+
+    df = pd.read_csv(
+        filename,
+        sep='\t',
+        header=0,
+    )
+        # TODO
+        pass
 
 
 
@@ -55,7 +95,33 @@ def load_kin_sub_list(
     return df
 
 
+def get_filtered_dataset(
+    path_to_dataset: str,
+    kin_organism: str = "human",
+    sub_organism: str = "human",
+    
+    problematic_uniprot_ids: List[str] = [], 
 
+
+) -> pd.DataFrame:
+
+    df = load_kin_sub_list(path_to_dataset)
+
+
+    # Filter organism 
+    df = df[df["KIN_ORGANISM"] == kin_organism]
+    df = df[df["SUB_ORGANISM"] == sub_organism]
+
+    # Filter problematic uniprot ids    
+    df = df[~df.KIN_ACC_ID.isin(problematic_uniprot_ids)]
+    df = df[~df.SUB_ACC_ID.isin(problematic_uniprot_ids)]
+    
+    # Filter isoforms (not supported by AF)
+    df = df[df.apply(lambda row: not ("-" in row["KIN_ACC_ID"] or "-" in row["SUB_ACC_ID"]), axis=1)]
+
+
+
+    return df
 
 """
 TODO: create a class that keep this somewhere for easy lookup. function that returns "unknown" if 
@@ -151,6 +217,7 @@ def main(
     kinase_tree,
     kinase_table,
 ):
+
     print(kin_sub_dataset)
     df: pd.DataFrame = load_kin_sub_list(kin_sub_dataset)
 
@@ -334,7 +401,7 @@ def main(
 
 
 
-    N = 40
+    N = 10
 
 
     
@@ -357,13 +424,13 @@ def main(
     df["OVERLAP_KINASE"] = df.apply(lambda row: list(set(row['FURTHEST_KINASES']) & set(row['KIN_ACC_ID'])), axis=1)
 
 
-    df["FURTHEST_KIN_NO_OVERLAP_FAMILY"] = df.apply(lambda row: get_furthest_kinases(row['KIN_ACC_ID'], n=N, output_type="UniprotID", no_overlap="Family"), axis=1)
+    df["FURTHEST_KIN_NO_OVERLAP_FAMILY"] = df.apply(lambda row: get_furthest_kinases(row['KIN_ACC_ID'], n=N, output_type="UniprotID", no_overlap="Group"), axis=1)
 
     df = df.sort_values(['NUM_KINASES'], ascending=False)
 
     #df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "KINASE_GROUPS","FURTHEST_KINASE_GROUP"]]
     #df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "OVERLAP_KINASE"]]
-    df = df[["NUM_KINASES", "NUM_FURTHEST_KINASES", "FURTHEST_KIN_NO_OVERLAP_FAMILY"]]
+    df = df[["KIN_ACC_ID", "NUM_KINASES", "NUM_FURTHEST_KINASES", "FURTHEST_KIN_NO_OVERLAP_FAMILY"]]
     #df.to_csv("df_dump.csv", sep="\t", index=True)
     df.to_csv("df_dump.csv", sep="\t", index=True)
 
