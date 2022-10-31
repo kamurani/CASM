@@ -44,7 +44,6 @@ SUB_PLDDT           = os.path.join(dataset_dir, "Human_psite_plddt_all.tsv")
 KIN_ATP_COORDS_RMSD = os.path.join(dataset_dir, "KIN_ATP_SITE.tsv")             # All known kinase ATP predicted sites
 
 ALPHAFILL_DIR       = "../../DATA/ALPHAFILL/KINASES"
-
 KINOME_TREE         = os.path.join(dataset_dir, "ePK.ph")
 KIN_TABLE           = os.path.join(dataset_dir, "kinase_table.txt")
 
@@ -57,7 +56,7 @@ IMPORTS
 from CASM.kinase.kinase import AlphaFillLoader
 from CASM.load_tree import get_distance_matrix, get_kinase_name_map
 
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Tuple
 import click as c
 import pandas as pd
 
@@ -77,8 +76,8 @@ def get_kin_atp_dict(
         sep='\t',
         header=0,
     )
-        # TODO
-        pass
+    # TODO
+    pass
 
 
 
@@ -96,16 +95,24 @@ def load_kin_sub_list(
 
 
 def get_filtered_dataset(
-    path_to_dataset: str,
+    
     kin_organism: str = "human",
     sub_organism: str = "human",
     
+    kin_sub_dataset=KIN_SUB_DATASET,
+    plddt_dataset=SUB_PLDDT,
+    atp_site_dataset=KIN_ATP_COORDS_RMSD,
+    alphafill_dir=ALPHAFILL_DIR,
+    kinase_tree=KINOME_TREE,
+    kinase_table=KIN_TABLE,
+
+
     problematic_uniprot_ids: List[str] = [], 
 
 
 ) -> pd.DataFrame:
 
-    df = load_kin_sub_list(path_to_dataset)
+    df = load_kin_sub_list(kin_sub_dataset)
 
 
     # Filter organism 
@@ -118,6 +125,150 @@ def get_filtered_dataset(
     
     # Filter isoforms (not supported by AF)
     df = df[df.apply(lambda row: not ("-" in row["KIN_ACC_ID"] or "-" in row["SUB_ACC_ID"]), axis=1)]
+
+
+
+    # Join PLDDT score 
+    def get_filter_func(d: dict):
+        return lambda row: d[row["SUB_ACC_ID"]][row["SUB_MOD_RSD"]]["plddt"] if (row["SUB_ACC_ID"] in d and row["SUB_MOD_RSD"] in d[row["SUB_ACC_ID"]]) else -1 #"UNKNOWN"
+    
+    func = get_filter_func(get_plddt_dict(filename=plddt_dataset))
+    d = get_plddt_dict(filename=plddt_dataset)
+    kinase_atp_sites: dict = get_atp_site_dict(filename=atp_site_dataset)
+
+    df['SUB_MOD_PLDDT'] = df.apply(func, axis=1)
+    df['SUB_MOD_PLDDT'] = df['SUB_MOD_PLDDT'].astype(float)
+
+    loader = AlphaFillLoader(
+        verbose=False,
+        cif_dir=alphafill_dir,
+    )
+
+    # Use file for coordinates / rmsd....
+    df['KIN_ATP_LOC_RMSD'] = df.apply(lambda row: kinase_atp_sites.get(row["KIN_ACC_ID"], dict(rmsd=-1)).get('rmsd'), axis=1)
+    df['KIN_ATP_LOC_RMSD'] = df['KIN_ATP_LOC_RMSD'].astype(float)
+
+    # FILTERING
+
+    #TODO
+    # note that if we remove kinases from the list now, we won't know if we have got overlap later with 
+    # the ``get_furthest_kinases`` !
+
+    mod_rsd_plddt_threshold: float  = 60
+    kin_atp_rmsd_threshold: float   = 6.0 #2.0
+    dff = df
+
+    dff = dff.loc[dff["SUB_MOD_PLDDT"] >= mod_rsd_plddt_threshold]      # phosphosite in AF2 model has pLDDT score >= threshold 
+    dff = dff.loc[dff["KIN_ATP_LOC_RMSD"] >= -1]                        # kinase ATP location is known (``-1`` is error value)
+    dff = dff.loc[dff["KIN_ATP_LOC_RMSD"] <= kin_atp_rmsd_threshold ]   # kinase ATP location prediction is above threshold RMSD (AlphaFill model local backbone)
+
+    df = dff
+
+    # Aggregate kinases per site
+    agg_dict = {
+        'KIN_ACC_ID': lambda x: x.tolist(), 
+        'SUB_MOD_PLDDT': "first",
+
+    }
+    df = df.groupby(['SUB_ACC_ID', 'SUB_MOD_RSD'], as_index=False).agg(agg_dict)
+
+    # Link kinase family name
+    
+    d = get_kinase_name_map(
+        kinase_table,
+        "UniprotID",
+    )
+
+    MATRIX = get_distance_matrix(filepath=kinase_tree, kinase_table=kinase_table)
+
+    """
+    Get furthest ``n`` kinases away from current kinase.  
+
+    # TODO: if multiple given, maybe get furthest ``n`` from ALL of them somehow? i.e. average distance to all? idk
+    """
+    def _get_furthest_kinases_single(
+        acc_id: str, 
+        n: int,
+        
+    ):
+        if acc_id not in MATRIX:
+            return []
+
+        kin_pairs = MATRIX[acc_id]
+
+        # Sort in descending order of pairwise distance
+        lists = sorted(kin_pairs.items(), key=lambda item: item[1], reverse=True) # list of tuples, sorted by dict's value
+        x, y = zip(*lists)
+
+        return x[0:n]
+
+    def get_furthest_kinases(
+        acc_id: Union[str, List[str]],
+        n: int, 
+        output_type: str = "UniprotID",
+        no_overlap: str = None, # Remove any kinases from the output that have ``Group`` in common with input kinases. 
+
+    ):
+        furthest_kin = [] 
+        if type(acc_id) == str:
+            acc_id = [acc_id]
+
+        for i in acc_id: 
+            
+            furthest_kin += _get_furthest_kinases_single(i, n=n)
+            furthest_kin = list(set(furthest_kin))
+
+        if not no_overlap:
+
+            output = [d[k][output_type] for k in furthest_kin]
+            return output
+        
+        kin_classifications = kin_list_tr(acc_id, to="Family")
+
+        # Classifications of input kinase(s)
+        classification = no_overlap 
+        in_kin_class = kin_list_tr(kin=acc_id, to=classification) # all unique groups that appear 
+
+        #print(acc_id, in_kin_class)
+        no_overlap_output = []
+        for k in furthest_kin:
+            if d[k][classification] not in in_kin_class:
+                no_overlap_output.append(k)
+            
+        # Assert that there are no overlapping KINASES in the groups, i.e. 
+        # if we've filtered for overlapping families, then there DEFINITELY shouldn't be overlapping kinases!
+        for k in acc_id: 
+            assert k not in no_overlap_output, f"{k} which is in {classification} {d[k][classification]}, is in {sorted(furthest_kin)}"
+
+        output = [d[o][output_type] for o in no_overlap_output]
+        return output
+        
+        
+        # TODO: ignore "other" classificaton?
+
+    """
+    Get unique members of a set when given a list of kinase id's
+    """
+    def kin_list_tr(
+        kin: List[str], # list of UniprotIDs for kinases
+        to: str = "Group", 
+    ):
+        groups = []
+        for k in kin: 
+            if k in d: 
+                addition = d[k][to]
+            else: 
+                addition = "UNKNOWN"
+            groups.append(addition)
+
+        return list(set(groups))
+
+
+    # Number of negative examples from kinome tree (before overlap computation)
+    N = 10
+
+    # TODO maybe try group here instead of family for overlap requirement
+    df["NEG_KIN_ACC_ID"] = df.apply(lambda row: get_furthest_kinases(row['KIN_ACC_ID'], n=N, output_type="UniprotID", no_overlap="Family"), axis=1)
 
 
 
@@ -183,6 +334,12 @@ def get_atp_site_dict(
                
     return d
 
+def new_main():
+
+    df = get_filtered_dataset()
+    
+    print(df)
+    df.to_csv("df_dump.csv", sep="\t", index=True)
 
 @c.command()
 @c.argument(
@@ -217,6 +374,16 @@ def main(
     kinase_tree,
     kinase_table,
 ):
+
+    df = get_filtered_dataset()
+
+    print(df)
+    exit(1)
+    return
+
+    """
+    Old main func:
+    """
 
     print(kin_sub_dataset)
     df: pd.DataFrame = load_kin_sub_list(kin_sub_dataset)
@@ -276,6 +443,8 @@ def main(
     # Using file instead...
     df['KIN_ATP_LOC_RMSD'] = df.apply(lambda row: kinase_atp_sites.get(row["KIN_ACC_ID"], dict(rmsd=-1)).get('rmsd'), axis=1)
     df['KIN_ATP_LOC_RMSD'] = df['KIN_ATP_LOC_RMSD'].astype(float)
+
+    
 
 
     # Join same sites together so we can see if there's >1 kinase for same site
@@ -478,4 +647,5 @@ def main(
 
 
 if __name__ == "__main__":
-    main()
+    #main()
+    new_main()
