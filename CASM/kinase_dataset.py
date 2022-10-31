@@ -198,7 +198,7 @@ class KinaseSubstrateDataset(Dataset):
                 }
                 self.pairs.append(pair)
             
-        print(self.pairs[0:10])
+        #print(self.pairs[0:10])
 
         
         self.data_list: List[Tuple[Data, Data]] = None
@@ -411,12 +411,23 @@ class KinaseSubstrateDataset(Dataset):
             
             coords: tuple = d[kin]['coords']
 
+            (x, y, z) = coords 
+            coords = (float(x), float(y), float(z))
+            (x, y, z) = coords 
+            print(type(x))
+
             g = construct_graph(
                 pdb_path=f"{self.raw_dir}/{kin}.pdb",
                 config=self.config,
             )
-            g = get_kinase_subgraph(g, coords)
-            fp = os.path.join(self.processed_dir, f"KIN_{kin}.pt"),
+            try:
+                g = get_kinase_subgraph(g, coords)
+            except:
+                print(f"coords: {coords}")
+                continue
+
+            g = self.graph_format_convertor(g)
+            fp = os.path.join(self.processed_dir, f"KIN_{kin}.pt")
             torch.save(g, fp)
 
             # TODO: wrap in try / except so it will run, remove from dataset after
@@ -436,12 +447,12 @@ class KinaseSubstrateDataset(Dataset):
             g = get_motif_subgraph(g, mod_rsd=node_id)
             g = self.graph_format_convertor(g)
 
-            fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt"),
+            fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt")
             torch.save(g, fp)
                         
         
         return 
-        
+
         idx = 0
         # Chunk dataset for parallel processing
         chunk_size = 128
