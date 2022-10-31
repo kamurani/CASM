@@ -440,7 +440,8 @@ class KinaseSubstrateDataset(Dataset):
             torch.save(g, fp)
                         
         
-
+        return 
+        
         idx = 0
         # Chunk dataset for parallel processing
         chunk_size = 128
