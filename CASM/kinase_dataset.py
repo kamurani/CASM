@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from graphein.ml.conversion import GraphFormatConvertor
 from graphein.protein.config import ProteinGraphConfig
-from graphein.protein.graphs import construct_graphs_mp
+from graphein.protein.graphs import construct_graphs_mp, construct_graph
 from graphein.protein.utils import (
     download_alphafold_structure,
     download_pdb,
@@ -31,6 +31,8 @@ except ImportError:
 import pandas as pd
 
 from CASM.kin_sub_pairs import get_atp_site_dict, KIN_ATP_COORDS_RMSD
+
+from CASM.subgraphs import get_motif_subgraph, get_kinase_subgraph
 
 """
 Pairs two graphs together in a single ``Data`` instance.
@@ -227,26 +229,26 @@ class KinaseSubstrateDataset(Dataset):
 
         self.examples: Dict[int, str] = dict(enumerate(self.pairs))
 
+        """
+        Unnecessary stuff
+        """
         if graph_labels is not None:
-
-
             self.graph_label_map = dict(enumerate(graph_labels))
-
         else:
             self.graph_label_map = None
-
         if node_labels is not None:
             self.node_label_map = dict(enumerate(node_labels))
         else:
             self.node_label_map = None
-        
         if chain_selections is not None:
             self.chain_selection_map = dict(enumerate(chain_selections))
         else:
             self.chain_selection_map = None
+
         self.validate_input()
         self.bad_pdbs: List[str] = []
         self.bad_uniprot_ids: List[str] = []
+
         # Configs
         self.config = graphein_config
         self.graph_format_convertor = graph_format_convertor
@@ -281,12 +283,17 @@ class KinaseSubstrateDataset(Dataset):
                 self.df.SUB_ACC_ID, self.df.SUB_MOD_RSD
             ) 
         ]
-        print(f"kinases: {kinases[0:10]}") 
-        print(f"substrates: {substrates[0:10]}")
+        #print(f"kinases: {kinases[0:10]}") 
+        #print(f"substrates: {substrates[0:10]}")
         return kinases + substrates
         
 
     def validate_input(self):
+        # TODO
+        # all our input is now in form of pairs (many more) so hard to validate.
+        
+        #assert len(self.df.SUB_ACC_ID) == len(self.examples)
+
         if self.graph_label_map is not None:
             assert len(self.structures) == len(
                 self.graph_label_map
@@ -296,8 +303,10 @@ class KinaseSubstrateDataset(Dataset):
                 self.node_label_map
             ), "Number of proteins and node labels must match"
 
+
+
         # Chain selection
-        if True:
+        if False:
             assert len(self.structures) == len(
                 self.chain_selection_map
             ), "Number of proteins and chain selections must match"
@@ -389,20 +398,41 @@ class KinaseSubstrateDataset(Dataset):
         if self.pdb_transform:
             self.transform_pdbs()
 
+        """
+        Kinase
+        """
+        d = self.kinase_metadata_dict
+
+        # Generate graphs for kinases 
+        for k in self.kinases:
+            
+            coords: tuple = d[k]['coords']
+
+            g = construct_graph(
+                pdb_path=f"{self.raw_dir}/{k}.pdb",
+                config=self.config,
+            )
+            g = get_kinase_subgraph(g, coords)
+
+            # TODO: wrap in try / except so it will run, remove from dataset after
+
 
         # Generate graphs for substrates
         #TODO
 
-        torch.load()
+        for sub, mod_rsd in zip(
+            self.df.SUB_ACC_ID, self.df.SUB_MOD_RSD
+        ):
+            # get graph
+            g = construct_graph(
+                pdb_path=f"{self.raw_dir}/{k}.pdb",
+                config=self.config,
+            )
+            mod_rsd = None #TODO convert to node id
 
-        # Generate graphs for kinases 
-        #TODO
-
-        d = self.kinase_metadata_dict
-
+            g = get_motif_subgraph(g, mod_rsd=mod_rsd)
 
         
-        coords = d[k]
 
         idx = 0
         # Chunk dataset for parallel processing
@@ -418,6 +448,7 @@ class KinaseSubstrateDataset(Dataset):
         )
 
         for chunk in tqdm(chunks):
+
             pdbs = [self.examples[idx] for idx in chunk]
             # Get chain selections
             if self.chain_selection_map is not None:
@@ -425,7 +456,12 @@ class KinaseSubstrateDataset(Dataset):
                     self.chain_selection_map[idx] for idx in chunk
                 ]
             else:
-                chain_selections = ["all"] * len(chunk)
+                chain_selections = "A" * len(chunk) # Just select chain A 
+
+            
+
+            
+
 
             # Create graph objects
             file_names = [f"{self.raw_dir}/{pdb}.pdb" for pdb in pdbs]
