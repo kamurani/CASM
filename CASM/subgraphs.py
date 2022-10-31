@@ -26,11 +26,25 @@ def get_protein_subgraph_radius(g, site, r=10.0):
     
     return s_g
 
+
+"""
+Coordinate subgraph
+"""
+def get_kinase_subgraph(
+    g: nx.Graph, 
+    coords: tuple, 
+    radius: float = 10.0,
+) -> nx.Graph:
+
+    s_g = extract_subgraph_from_point(g, centre_point=coords, radius=radius)
+    return s_g
+
 def get_motif_subgraph(
     g: nx.Graph, 
     mod_rsd: str, # ID of form A:RES:123
     radius: float = 10.0, 
     rsa: float = 0.0,
+    plddt: float = 0.0,
 
 ) -> nx.Graph:
 
@@ -39,6 +53,9 @@ def get_motif_subgraph(
         g_site: Dict = g.nodes(data=True)[mod_rsd]
     except:
         raise KeyError(f"Node '{mod_rsd}' not in graph.")
+
+    # Return `None` if MOD_RSD is not > threshold pLDDT value. 
+    #print(g.nodes(data=True)[mod_rsd]['b_fac'])
                 
     g_site_rsd: str = str(g_site['residue_name'])
     g_site_pos: int = int(g_site['residue_number'])
@@ -47,7 +64,12 @@ def get_motif_subgraph(
     s_g = get_protein_subgraph_radius(g=g, site=mod_rsd, r=radius)
 
 
+
     # Subgraph (rsa)
     # TODO
+
+    
+
+    
 
     return s_g
