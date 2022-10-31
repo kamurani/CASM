@@ -34,6 +34,8 @@ from CASM.kin_sub_pairs import get_atp_site_dict, KIN_ATP_COORDS_RMSD
 
 from CASM.subgraphs import get_motif_subgraph, get_kinase_subgraph
 
+from CASM.load_psp import convert_mod_rsd
+
 """
 Pairs two graphs together in a single ``Data`` instance.
 """
@@ -403,6 +405,10 @@ class KinaseSubstrateDataset(Dataset):
         """
         d = self.kinase_metadata_dict
 
+        a = convert_mod_rsd("S210")
+        print(a)
+        exit(1)
+
         # Generate graphs for kinases 
         for k in self.kinases:
             
@@ -418,8 +424,6 @@ class KinaseSubstrateDataset(Dataset):
 
 
         # Generate graphs for substrates
-        #TODO
-
         for sub, mod_rsd in zip(
             self.df.SUB_ACC_ID, self.df.SUB_MOD_RSD
         ):
@@ -429,9 +433,13 @@ class KinaseSubstrateDataset(Dataset):
                 config=self.config,
             )
             mod_rsd = None #TODO convert to node id
-
+            
             g = get_motif_subgraph(g, mod_rsd=mod_rsd)
+            g = self.graph_format_convertor(g)
 
+            fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt"),
+            torch.save(g, fp)
+                        
         
 
         idx = 0
@@ -502,6 +510,7 @@ class KinaseSubstrateDataset(Dataset):
                     torch.save(
                         data_list[i],
                         os.path.join(self.processed_dir, f"{pdb}.pt"),
+                        
                     )
                 else:
                     torch.save(
