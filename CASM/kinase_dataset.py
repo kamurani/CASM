@@ -30,6 +30,8 @@ except ImportError:
 
 import pandas as pd
 
+from CASM.kin_sub_pairs import get_atp_site_dict, KIN_ATP_COORDS_RMSD
+
 """
 Pairs two graphs together in a single ``Data`` instance.
 """
@@ -53,7 +55,11 @@ class KinaseSubstrateDataset(Dataset):
         pdb_codes: Optional[List[str]] = None,
         uniprot_ids: Optional[List[str]] = None,
 
-        dataframe: pd.DataFrame = None, 
+        df: pd.DataFrame = None, 
+
+        kinase_metadata_dict: dict = get_atp_site_dict(
+            KIN_ATP_COORDS_RMSD,
+        ),
         
 
 
@@ -135,7 +141,11 @@ class KinaseSubstrateDataset(Dataset):
 
 
         """""""""""""""""""""""""""""""""""""""""" 
+        self.name = name
 
+
+
+        
         """
         Create ``data_list`` using dataframe 
         """
@@ -143,10 +153,54 @@ class KinaseSubstrateDataset(Dataset):
         # TODO: download all necessary kinases
         # get list of all kinases (can't use unique as KIN_ACC_ID will have list of kinases)
 
+        self.substrates = list(df.SUB_ACC_ID.unique())
+        self.kinases = list(df.KIN_ACC_ID.explode().unique())
+        
+        self.kinase_metadata_dict = kinase_metadata_dict
 
+
+        # Generate pairs (structures) with labels
+        
         
 
-        self.name = name
+        # have to download pdb files for self.structures; but have to create graphs separately for sub / kin
+        self.structures = self.substrates + self.kinases
+
+
+
+        self.pairs = [] 
+
+        # TODO generate pairs 
+
+        df2: dict = dict([((sub, mod_rsd), (pos, neg)) for sub, mod_rsd, pos, neg in zip(df.SUB_ACC_ID, df.SUB_MOD_RSD, df.KIN_ACC_ID, df.NEG_KIN_ACC_ID) ])
+
+        # For each site
+        for (sub, mod_rsd), (pos, neg) in df2.items():
+            
+            # Iterate through positive examples
+            label = 1
+            for kin in pos:
+                pair = {
+                    "sub": sub,
+                    "mod_rsd": mod_rsd,
+                    "kin": kin,
+                    "label": label,     
+                }
+                self.pairs.append(pair)    
+            # Iterate through negative examples    
+            label = 0 
+            for kin in neg:     
+                pair = {
+                    "sub": sub,
+                    "mod_rsd": mod_rsd,
+                    "kin": kin,
+                    "label": label,     
+                }
+                self.pairs.append(pair)
+            
+        print(self.pairs[0:10])
+
+        
         self.data_list: List[Tuple[Data, Data]] = None
 
         """
@@ -175,10 +229,13 @@ class KinaseSubstrateDataset(Dataset):
 
         # Labels & Chains
 
-        self.examples: Dict[int, str] = dict(enumerate(self.structures))
+        self.examples: Dict[int, str] = dict(enumerate(self.pairs))
 
         if graph_labels is not None:
+
+
             self.graph_label_map = dict(enumerate(graph_labels))
+
         else:
             self.graph_label_map = None
 
@@ -186,7 +243,7 @@ class KinaseSubstrateDataset(Dataset):
             self.node_label_map = dict(enumerate(node_labels))
         else:
             self.node_label_map = None
-
+        
         if chain_selections is not None:
             self.chain_selection_map = dict(enumerate(chain_selections))
         else:
@@ -235,7 +292,9 @@ class KinaseSubstrateDataset(Dataset):
             assert len(self.structures) == len(
                 self.node_label_map
             ), "Number of proteins and node labels must match"
-        if self.chain_selection_map is not None:
+
+        # Chain selection
+        if True:
             assert len(self.structures) == len(
                 self.chain_selection_map
             ), "Number of proteins and chain selections must match"
@@ -322,10 +381,25 @@ class KinaseSubstrateDataset(Dataset):
         return graph
 
     def process(self):
-        """Processes structures from files into PyTorch Geometric Data."""
+        """Processes structures from files into PyTorch Geometric Data."""       
         # Preprocess PDB files
         if self.pdb_transform:
             self.transform_pdbs()
+
+
+        # Generate graphs for substrates
+        #TODO
+
+        torch.load()
+
+        # Generate graphs for kinases 
+        #TODO
+
+        d = self.kinase_metadata_dict
+
+
+        
+        coords = d[k]
 
         idx = 0
         # Chunk dataset for parallel processing
@@ -404,6 +478,24 @@ class KinaseSubstrateDataset(Dataset):
         :type idx: int
         :return: PyTorch Geometric Data object.
         """
+        # TODO: work out structure for storing the pairs and labels
+        
+        # structures[idx]['kinase'] # kin, sub, mod_rsd, label, 
+        # OR alternative structure: 
+
+        # Load kinase, substrate, mod_rsd, label
+
+        kinase = torch.load(
+                os.path.join(self.processed_dir, f"KIN_{self.examples[idx]['kin']}.pt")
+        )
+
+        site = torch.load(
+                os.path.join(self.processed_dir, f"SUB_{self.examples[idx]['sub']}_{self.examples[idx]['mod_rsd']}.pt")
+        )
+
+        label = torch.tensor(self.examples[idx]['label'])
+
+
         if self.chain_selection_map is not None:
             return torch.load(
                 os.path.join(
@@ -412,6 +504,7 @@ class KinaseSubstrateDataset(Dataset):
                 )
             )
         else:
+
             return torch.load(
                 os.path.join(self.processed_dir, f"{self.structures[idx]}.pt")
             )
