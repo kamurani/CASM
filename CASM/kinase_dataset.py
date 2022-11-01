@@ -31,9 +31,7 @@ except ImportError:
 import pandas as pd
 
 from CASM.kin_sub_pairs import get_atp_site_dict, KIN_ATP_COORDS_RMSD
-
 from CASM.subgraphs import get_motif_subgraph, get_kinase_subgraph
-
 from CASM.load_psp import convert_mod_rsd
 
 """
@@ -172,6 +170,7 @@ class KinaseSubstrateDataset(Dataset):
 
         self.pairs = [] 
 
+        # Turn dataframe into dict
         df2: dict = dict([((sub, mod_rsd), (pos, neg)) for sub, mod_rsd, pos, neg in zip(df.SUB_ACC_ID, df.SUB_MOD_RSD, df.KIN_ACC_ID, df.NEG_KIN_ACC_ID) ])
 
         # For each site
@@ -197,6 +196,9 @@ class KinaseSubstrateDataset(Dataset):
                     "label": label,     
                 }
                 self.pairs.append(pair)
+
+        
+        
             
         #print(self.pairs[0:10])
 
@@ -404,16 +406,29 @@ class KinaseSubstrateDataset(Dataset):
         # add overwrite option. 
         # i.e. don't reload entire dataset if ``to_process`` is empty list. 
 
+        kin_to_process = [
+            kin
+            for kin in set(self.kinases)
+            if not os.path.exists(Path(self.processed_dir) / f"KIN_{kin}.pt")
+        ]
+        
+        sites_to_process = [
+            (sub, mod_rsd)
+            for sub, mod_rsd in set(zip(self.df.SUB_ACC_ID, self.df.SUB_MOD_RSD))
+            if not os.path.exists(Path(self.processed_dir) / f"SUB_{sub}_{mod_rsd}.pt")           
+        ]
 
+        #print(sites_to_process)
+        #print(kin_to_process)
         """
         Kinase
         """
         d = self.kinase_metadata_dict
        
-
+        problem_kinases = []
 
         # Generate graphs for kinases 
-        for kin in self.kinases:
+        for kin in kin_to_process:
                 
             try:
                 coords: tuple = d[kin]['coords']
@@ -428,6 +443,7 @@ class KinaseSubstrateDataset(Dataset):
                 g = get_kinase_subgraph(g, coords)
             except:
                 print(f"[KINASE] Failed to process {kin}")
+                problem_kinases.append(kin)
                 continue
 
             g = self.graph_format_convertor(g)
@@ -436,11 +452,9 @@ class KinaseSubstrateDataset(Dataset):
 
             # TODO: wrap in try / except so it will run, remove from dataset after
 
-
+        problem_sites = []
         # Generate graphs for substrates
-        for sub, mod_rsd in zip(
-            self.df.SUB_ACC_ID, self.df.SUB_MOD_RSD
-        ):
+        for sub, mod_rsd in sites_to_process:
             try:
                 # get graph
                 g = construct_graph(
@@ -453,12 +467,25 @@ class KinaseSubstrateDataset(Dataset):
                 g = self.graph_format_convertor(g)
             except:
                 print(f"[SUBSTRATE] Failed to process {sub} {mod_rsd}")
+                problem_sites.append((sub, mod_rsd))
                 continue
 
             fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt")
             torch.save(g, fp)
-                        
+
+        # Remove values from examples if causing us headaches
+        def validate_example(example: dict) -> bool:
+            if example['kin'] in problem_kinases or (example['sub'], example['mod_rsd']) in problem_sites:
+                return False
+            return True
         
+        print(len(self.examples))
+        updated_examples = {key:val for key, val in self.examples.items() if validate_example(val) }       
+        
+        self.examples = updated_examples
+
+        print(len(self.examples))
+
         return 
 
         idx = 0
@@ -562,7 +589,12 @@ class KinaseSubstrateDataset(Dataset):
 
         label = torch.tensor(self.examples[idx]['label'])
 
+        return kinase, site, mod_rsd, label  
 
+
+        """
+        From previous class: 
+        """
         if self.chain_selection_map is not None:
             return torch.load(
                 os.path.join(
