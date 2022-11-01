@@ -378,8 +378,8 @@ class KinaseSubstrateDataset(Dataset):
         # TODO: remove bad uniprot / pdb ids from self.structures
 
     def len(self) -> int:
-        """Returns length of data set (number of structures)."""
-        return len(self.structures)
+        """Returns length of data set (number of examples)."""
+        return len(self.examples)
 
     def transform_pdbs(self):
         """
@@ -477,15 +477,30 @@ class KinaseSubstrateDataset(Dataset):
         def validate_example(example: dict) -> bool:
             if example['kin'] in problem_kinases or (example['sub'], example['mod_rsd']) in problem_sites:
                 return False
+            # Check that it exists as a file? to double confirm?
+            if not os.path.exists(Path(self.processed_dir) / f"SUB_{example['sub']}_{example['mod_rsd']}.pt"):
+                return False
+            if not os.path.exists(Path(self.processed_dir) / f"KIN_{example['kin']}.pt"):
+                return False
             return True
         
         print(len(self.examples))
-        updated_examples = {key:val for key, val in self.examples.items() if validate_example(val) }       
+        #updated_examples = {key:val for key, val in self.examples.items() if validate_example(val) }       
+        updated_examples: list = [data for data in self.examples.values() if validate_example(data)]
+
+
+
+        self.examples = dict(enumerate(updated_examples))
+
         
-        self.examples = updated_examples
+
+        # check that all files exist
+        for key, val in self.examples.items():
+            assert os.path.exists(Path(self.processed_dir) / f"SUB_{val['sub']}_{val['mod_rsd']}.pt")
+            assert os.path.exists(Path(self.processed_dir) / f"KIN_{val['kin']}.pt")
+    
 
         print(len(self.examples))
-
         return 
 
         idx = 0
@@ -579,16 +594,20 @@ class KinaseSubstrateDataset(Dataset):
 
         # Load kinase, substrate, mod_rsd, label
 
+        mod_rsd: str = self.examples[idx]['mod_rsd']
+
         kinase = torch.load(
                 os.path.join(self.processed_dir, f"KIN_{self.examples[idx]['kin']}.pt")
         )
+        #kinase = torch.tensor(kinase)
 
         site = torch.load(
-                os.path.join(self.processed_dir, f"SUB_{self.examples[idx]['sub']}_{self.examples[idx]['mod_rsd']}.pt")
+                os.path.join(self.processed_dir, f"SUB_{self.examples[idx]['sub']}_{mod_rsd}.pt")
         )
-
+        #site = torch.tensor(site)
         label = torch.tensor(self.examples[idx]['label'])
 
+        
         return kinase, site, mod_rsd, label  
 
 
