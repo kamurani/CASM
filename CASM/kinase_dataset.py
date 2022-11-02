@@ -56,6 +56,7 @@ class KinaseSubstrateDataset(Dataset):
         name, 
         pdb_codes: Optional[List[str]] = None,
         uniprot_ids: Optional[List[str]] = None,
+        overwrite: bool = False,
 
         df: pd.DataFrame = None, 
 
@@ -345,14 +346,20 @@ class KinaseSubstrateDataset(Dataset):
                 for pdb in set(self.pdb_codes)
                 if not os.path.exists(Path(self.raw_dir) / f"{pdb}.pdb")
             ]
-        if self.uniprot_ids:
+        if self.kinases:
 
             # Only download undownloaded Uniprot IDs
             to_download = [
-                uniprot
-                for uniprot in set(self.uniprot_ids)
-                if not os.path.exists(Path(self.raw_dir) / f"{uniprot}.pdb")
+                kin
+                for kin in set(self.kinases)
+                if not os.path.exists(Path(self.raw_dir) / f"{kin}.pdb")
+            ] + [
+                sub
+                for sub in set(self.substrates)
+                if not os.path.exists(Path(self.raw_dir) / f"{sub}.pdb")
             ]
+            # Only unique; some kinases are also substrates
+            to_download = list(set(to_download))
             print(f"Uniprot IDs to download: {to_download}")
 
             for uniprot in tqdm(to_download):
@@ -430,6 +437,7 @@ class KinaseSubstrateDataset(Dataset):
         # Generate graphs for kinases 
         for kin in kin_to_process:
                 
+            #if True:
             try:
                 coords: tuple = d[kin]['coords']
 
@@ -441,14 +449,16 @@ class KinaseSubstrateDataset(Dataset):
                     config=self.config,
                 )
                 g = get_kinase_subgraph(g, coords)
+            #try:
+                g = self.graph_format_convertor(g)
             except:
                 print(f"[KINASE] Failed to process {kin}")
                 problem_kinases.append(kin)
                 continue
-
-            g = self.graph_format_convertor(g)
-            fp = os.path.join(self.processed_dir, f"KIN_{kin}.pt")
-            torch.save(g, fp)
+            
+            if g is not None:
+                fp = os.path.join(self.processed_dir, f"KIN_{kin}.pt")
+                torch.save(g, fp)
 
             # TODO: wrap in try / except so it will run, remove from dataset after
 
@@ -469,9 +479,10 @@ class KinaseSubstrateDataset(Dataset):
                 print(f"[SUBSTRATE] Failed to process {sub} {mod_rsd}")
                 problem_sites.append((sub, mod_rsd))
                 continue
-
-            fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt")
-            torch.save(g, fp)
+            
+            if g is not None:
+                fp = os.path.join(self.processed_dir, f"SUB_{sub}_{mod_rsd}.pt")
+                torch.save(g, fp)
 
         # Remove values from examples if causing us headaches
         def validate_example(example: dict) -> bool:
