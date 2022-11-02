@@ -2,14 +2,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_geometric
 from torch_geometric.nn import GCNConv, GATConv, global_max_pool as gmp, global_add_pool as gap,global_mean_pool as gep,global_sort_pool
 from torch_geometric.utils import dropout_adj
 from torch.optim.lr_scheduler import MultiStepLR
 
-
+import numpy as np
 
 class GCNN(nn.Module):
-    def __init__(self, n_output=1, num_features_pro= 1024, output_dim=128, dropout=0.2):
+    def __init__(self, n_output=1, num_features_pro=1024, output_dim=128, dropout=0.2):
         super(GCNN, self).__init__()
 
         print('GCNN Loaded')
@@ -35,12 +36,96 @@ class GCNN(nn.Module):
     def forward(self, pro1_data, pro2_data):
 
         #get graph input for protein 1 
-        pro1_x, pro1_edge_index, pro1_batch = pro1_data.x, pro1_data.edge_index, pro1_data.batch
-        # get graph input for protein 2
-        pro2_x, pro2_edge_index, pro2_batch = pro2_data.x, pro2_data.edge_index, pro2_data.batch
+        #print(pro1_data)
+        if type(pro1_data) == torch_geometric.data.data.Data:
+                num_nodes = pro1_data.num_nodes
+                features = [pro1_data.amino_acid_one_hot, pro1_data.asa, pro1_data.phi, pro1_data.psi]
+
+                for i, f in enumerate(features):
+                        features[i] = torch.as_tensor(f)
+
+                p1 = torch.cat(features, dim=1)
+                print(p1)
+        else:
+       
+                num_nodes = pro1_data.num_nodes
+                features = [pro1_data.amino_acid_one_hot, pro1_data.asa, pro1_data.phi, pro1_data.psi]
+                
+                # Concatenate along 1st dim (dim=0) to get all nodes for all batches in one tensor
+                for i, f in enumerate(features):
+                        
+                        features[i] = torch.as_tensor(np.concatenate([np.array(i, dtype=np.float32) for i in f]))
+                        f = features[i]
+                        # Vertically stack if only one feature long
+                        if f.shape == torch.Size([num_nodes]):
+                                features[i] = f.view(-1, 1)
 
 
-        x = self.pro1_conv1(pro1_x, pro1_edge_index)
+                
+        
+                # aa = pro1_data.amino_acid_one_hot
+                # p1 = torch.as_tensor(aa)
+                # for f in features:
+                #         print(f)
+
+                p1 = torch.cat(features, dim=1)
+                p1 = p1.float()
+
+        
+        
+                
+                #features = [p1.amino_acid_one_hot, p1.asa, p1.phi, p1.psi]
+
+                """
+
+                # WE NEED TO TURN LIST OF LISTS INTO NP ARRAY OF ARRAYS
+
+                for i, f in enumerate(features):
+                        
+                        #f = np.vstack(f).astype(np.float)
+
+                        #features[i] = torch.as_tensor(np.array([np.array(xi, dtype=np.float) for xi in f], dtype=np.float))
+                        features[i] = torch.as_tensor(f)
+
+                print(type(features))
+                print(features[0][0])
+                
+                #exit(1)
+                #p1 = torch.cat(features, dim=1)
+                """
+
+                #print(p1.amino_acid_one_hot)
+                #p1 = torch.cat((p1.amino_acid_one_hot, p1.asa, p1.coords, p1.phi, p1.psi), dim=1)
+
+                pro1_edge_index, pro1_batch = pro1_data.edge_index, pro1_data.batch
+
+
+
+                # get graph input for protein 2
+                pro2_edge_index, pro2_batch = pro2_data.edge_index, pro2_data.batch
+                
+                num_nodes = pro2_data.num_nodes
+                features = [pro2_data.amino_acid_one_hot, pro2_data.asa, pro2_data.phi, pro2_data.psi]
+                
+                # Concatenate along 1st dim (dim=0) to get all nodes for all batches in one tensor
+                for i, f in enumerate(features):
+                        
+                        features[i] = torch.as_tensor(np.concatenate([np.array(i, dtype=np.float32) for i in f]))
+                        f = features[i]
+                        # Vertically stack if only one feature long
+                        if f.shape == torch.Size([num_nodes]):
+                                features[i] = f.view(-1, 1)
+
+                p2 = torch.cat(features, dim=1)
+                p2 = p2.float()
+
+                #print(f"pro1: {p1.shape}")
+                #print(f"{p1.dtype}")
+                #print(f"pro2: {p2.shape}")
+
+
+
+        x = self.pro1_conv1(p1, pro1_edge_index)
         x = self.relu(x)
         
 	# global pooling
@@ -52,7 +137,7 @@ class GCNN(nn.Module):
 
 
 
-        xt = self.pro2_conv1(pro2_x, pro2_edge_index)
+        xt = self.pro2_conv1(p2, pro2_edge_index)
         xt = self.relu(xt)
 
 	# global pooling
