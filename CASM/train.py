@@ -127,22 +127,49 @@ device = torch.device("cuda:1") if torch.cuda.is_available() else torch.device("
 
 
 size = len(dataset)
+
+n_epochs_stop = 6
+epochs_no_improve = 0
+early_stop = False
+
+min_loss = 100
+
+
 train_ratio = 0.8
 
-batch_size = 4 # 64?
+batch_size = 64#4 # 64?
 num_workers = 0
 
 
 # Train / test split
+
 training_data, test_data = random_split(dataset, [math.floor(train_ratio * size), size - math.floor(train_ratio * size)])
+print(size, len(training_data), len(test_data))
 
 # Kinase / substrate dataset 
 train_dataloader = DataLoader(training_data, batch_size=batch_size, num_workers=num_workers, shuffle=True)
 test_dataloader = DataLoader(test_data, batch_size=batch_size, num_workers=num_workers, shuffle=True)
 
+print(f"trainloader: {len(train_dataloader)}")
+print(f"test loader: {len(test_dataloader)}")
 
 # TODO: validation data loader
 
+def predict(model, device, loader):
+    model.eval()
+    predictions = torch.Tensor()
+    labels = torch.Tensor()
+    with torch.no_grad():
+        for kin, sub, mod_rsd, label in loader:
+            kin = kin.to(device)
+            sub = sub.to(device)
+            #print(torch.Tensor.size(kin.x), torch.Tensor.size(sub.x))
+            output = model(kin, sub)
+            predictions = torch.cat((predictions, output.cpu()), 0)
+            labels = torch.cat((labels, label.view(-1,1).cpu()), 0)
+    labels = labels.numpy()
+    predictions = predictions.numpy()
+    return labels.flatten(), predictions.flatten()
 
 def train(model, device, train_dataloader, optimizer, epoch):
 
@@ -154,8 +181,10 @@ def train(model, device, train_dataloader, optimizer, epoch):
     scheduler = MultiStepLR(optimizer, milestones=[1,5], gamma=0.5)
     labels_tr = torch.Tensor()
 
-    for count, (kinase, site, mod_rsd, label) in enumerate(train_dataloader):
-
+    for count, (kinase, site, metadata, label) in enumerate(train_dataloader):
+        
+        (kin_name, sub_name, mod_rsd) = metadata
+        #print(f"kinase: {type(kinase)}")
         kinase = kinase.to(device)
         site = site.to(device)
 
@@ -175,17 +204,20 @@ def train(model, device, train_dataloader, optimizer, epoch):
     print(f'Epoch {epoch-1} / 30 [==============================] - train_loss : {loss} - train_accuracy : {acc_tr}')
 
 
-model = GCNN()
+model = GCNN(
+    num_features_pro=23,
+)
+#model = model.float()
 model.to(device)
-num_epochs = 100
+num_epochs = 150
 best_accuracy = 0
-lr = 0.001
+lr = 0.002 # hyperparam
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
 for epoch in range(num_epochs):
     
     train(model, device, train_dataloader, optimizer, epoch+1)
-    G, P = predict(model, device, testloader)
+    G, P = predict(model, device, test_dataloader)
 
     loss = get_mse(G,P)
     accuracy = get_accuracy(G,P, 0.5)
@@ -195,14 +227,15 @@ for epoch in range(num_epochs):
     if(accuracy > best_accuracy):
         best_accuracy = accuracy
         best_acc_epoch = epoch
-        torch.save(model.state_dict(), "../GCN.pth") #path to save the model
+        torch.save(model.state_dict(), "../saved_models/GCN_SAVE.pth") #path to save the model
         print("Model")
-    if(loss< min_loss):
+    if(loss < min_loss):
         epochs_no_improve = 0
         min_loss = loss
         min_loss_epoch = epoch
     elif loss > min_loss:
         epochs_no_improve += 1
+
     if epoch > 5 and epochs_no_improve == n_epochs_stop:
         print('Early stopping!' )
         early_stop = True
