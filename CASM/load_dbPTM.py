@@ -38,7 +38,9 @@ verbose = True
 
 KINASE_FAMILY_DICT = dict(enumerate(KINASE_FAMILIES))
 
-KINASE_TO_INDEX = {item:idx for idx, item in enumerate(KINASE_FAMILIES)}
+NUM_KINASE_FAMILIES = len(KINASE_FAMILY_DICT)
+
+KINASE_FAMILY_TO_INDEX = {item:idx for idx, item in enumerate(KINASE_FAMILIES)}
 
 #print(f"length: {len(KINASE_FAMILY_DICT)}")
 
@@ -53,6 +55,7 @@ with open(entry_name_fp) as f:
         (entry_name, acc_id) = line.split()
         uniprot_entry2acc[entry_name] = acc_id
 
+
 """
 Convert entry name to uniprot ID
 """
@@ -62,59 +65,72 @@ def get_acc_id(entry_name: str):
         return uniprot_entry2acc[entry_name]
     return None
 
-# Go through all files 
-count = {} 
-chain = 'A'
+"""
+Return dictionary of all sites
+"""
+def get_sites():
+    # Go through all files 
+    count = {} 
+    chain = 'A'
 
-# Dict of all sites 
-sites = {}
-for kinase in KINASE_FAMILIES:
-    count[kinase] = {}
-    for polarity in ["pos", "neg"]:
+    bad_entry_names = []
 
-        count[kinase][polarity] = 0
-        fn = f"{kinase}_{polarity}.fasta"
-        fp = Path(root_dir) / fn 
+    # Dict of all sites 
+    sites = {}
+    for kinase in KINASE_FAMILIES:
+        count[kinase] = {}
+        for polarity in ["pos", "neg"]:
 
-        # Load fasta file
-        
-        
-        for record in SeqIO.parse(fp, "fasta"):
+            count[kinase][polarity] = 0
+            fn = f"{kinase}_{polarity}.fasta"
+            fp = Path(root_dir) / fn 
 
-
-            header  = record.id
-            seq     = record.seq
-            entry_name, pos = header.rsplit("_", 1) 
+            # Load fasta file
             
-            acc_id = get_acc_id(entry_name)
-            if acc_id is None: 
-                if verbose:
-                    print(f"No Uniprot ID mapping from '{entry_name}'")
-                continue 
-
-            res: str = seq[len(seq) // 2]   # middle character
-            res = aa1to3[res]               # 3 letter code
             
-            mod_rsd: str = ':'.join([chain, res, pos])
-            pos = int(pos)
-
-            d = {
-                "pos": pos, 
-                "res": res, 
-                "mod_rsd": mod_rsd, # Node ID 
-            }
-
-            # Index using this tuple 
-            site = (entry_name, pos) 
-            if site not in sites:
-                sites[site] = {"pos": [], "neg": [], "data": d} 
-
-            sites[site][polarity].append(kinase) 
-
-            count[kinase][polarity] += 1
+            for record in SeqIO.parse(fp, "fasta"):
 
 
-def print_entry_names():
+                header  = record.id
+                seq     = record.seq
+                entry_name, pos = header.rsplit("_", 1) 
+                
+                acc_id = get_acc_id(entry_name)
+                if acc_id is None: 
+                    bad_entry_names.append(entry_name)
+                    #print(f"No Uniprot ID mapping from '{entry_name}'")
+                    continue 
+
+                res: str = seq[len(seq) // 2]   # middle character
+                res = aa1to3[res]               # 3 letter code
+                
+                mod_rsd: str = ':'.join([chain, res, pos])
+                pos = int(pos)
+
+                d = {
+                    "pos": pos, 
+                    "res": res, 
+                    "mod_rsd": mod_rsd, # Node ID 
+                }
+
+                # Index using this tuple 
+                site = (acc_id, pos) 
+
+                # index using actual node ID 
+                #site = (acc_id, mod_rsd)
+                if site not in sites:
+                    sites[site] = {"pos": [], "neg": [], "mod_rsd": mod_rsd} # "data": d
+
+                if kinase not in sites[site][polarity]:
+                    sites[site][polarity].append(kinase) # Should contain unique values
+
+                count[kinase][polarity] += 1
+
+    return sites
+
+
+
+def print_entry_names(sites):
 
     names = [entry_name for (entry_name, pos) in sites.keys()] 
     names = list(set(names)) # only unique values (redundant)
@@ -123,26 +139,28 @@ def print_entry_names():
         print(n)
 
 
+#sites = get_sites()
+# for i in list(sites.items())[0:10]:
+#     print(i)
 
-for i in list(sites.items())[0:10]:
-    print(i)
 
-exit(1)
         #print(kinase, polarity, count[kinase][polarity], sep="\t")
 
+def _test_sites():
 
-# TEST 
-entry_name = "TERT_HUMAN"
-site = (entry_name, 550)
+    #TEST 
+    entry_name = "TERT_HUMAN"
+    acc_id = get_acc_id(entry_name)
+    site = (acc_id, 550)
 
-mod_rsd = sites[site]['data']['mod_rsd']
-print(mod_rsd)
-#print(sites.keys())
-exit(1)
+    mod_rsd = sites[site]['mod_rsd']
+    print(mod_rsd)
+    print(sites.keys())
+
 
 #print(f"{entry_name} {mod_rsd}", f"POS: {sites[site]['pos']}", f"NEG: {sites[site]['neg']}")
-for key, item in sites.items():
-    print(item["pos"])
+# for key, item in sites.items():
+#     print(item["pos"])
     #print(len(item["pos"]), len(item["neg"]), sep="\t")
 
 #filename = {}
