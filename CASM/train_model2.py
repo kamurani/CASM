@@ -120,6 +120,7 @@ from torch_geometric.data import DataLoader
 import math
 
 from CASM.model_2 import GCNN2
+from CASM.load_dbPTM import KINASE_FAMILIES, get_sites
 
 import torch_optimizer as optim 
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau
@@ -136,6 +137,7 @@ from torch_geometric.utils import add_self_loops, degree
 device = torch.device("cuda:1") if torch.cuda.is_available() else torch.device("cpu")
 
 from CASM.substrate_dataset import PhosphositeDataset
+
 
 dataset = PhosphositeDataset(
     root="../GRAPHS3_MEILER/"
@@ -157,6 +159,7 @@ num_workers = 0
 
 
 # Train / test split
+torch.manual_seed(69)
 training_data, test_data = random_split(dataset, [math.floor(train_ratio * size), size - math.floor(train_ratio * size)])
 
 # Count examples 
@@ -193,6 +196,10 @@ test_dataloader = DataLoader(test_data, batch_size=batch_size, num_workers=num_w
 print(f"trainloader: {len(train_dataloader)}")
 print(f"test loader: {len(test_dataloader)}")
 
+
+# dbPTM sites
+dbptm_sites = get_sites()
+
 # TODO: validation data loader
 
 def predict(model, device, loader):
@@ -200,17 +207,76 @@ def predict(model, device, loader):
     predictions = torch.Tensor()
     labels = torch.Tensor()
     with torch.no_grad():
-        for site, label in loader:
+        for site, label, metadata in loader:
             site = site.to(device)
 
             #print(torch.Tensor.size(kin.x), torch.Tensor.size(sub.x))
             output = model(site)
             predictions = torch.cat((predictions, output.cpu()), 0)
-            labels = torch.cat((labels, label.view(-1,1).cpu()), 0)
+            labels = torch.cat((labels, label.cpu()), 0)
 
-    labels = labels.numpy()
-    predictions = predictions.numpy()
-    return labels.flatten(), predictions.flatten()
+    return labels, predictions
+    #labels = labels.numpy()
+    #predictions = predictions.numpy()
+    #return labels.flatten(), predictions.flatten()
+
+"""
+Returns true if (any) true kinase is in top N classes
+"""
+def hit_at_n(
+    prediction, 
+    true_kinases,  # Should be list of lists; for batch_size 
+    n: int = 1, 
+):
+    num_hits = 0
+    indexes = torch.topk(prediction, n).indices
+
+    for i, idx in enumerate(indexes):
+        
+        for j in idx:
+            j = int(j)
+            kin = KINASE_FAMILIES[j]
+            #print(f"kin: {kin}")
+            if kin in true_kinases[i]:
+                
+                #print("yes!")
+                #return True
+                num_hits += 1
+
+    return num_hits
+
+
+    batch_size  = 10^5
+    N           = 5
+
+    a = torch.randn(batch_size, NUM_KINASE_FAMILIES)
+    #print(a)
+    true_kinases = [["CDK", "CAMK2"], ["PKG"], ["PKG"], ["PKG", "CAMK2"]] # "Correct", if ANY of these are predicted in top N classes
+    true_kinases = [["CDK", "CAMK2"]] * batch_size
+
+    true_kinases = [["PKN"]] * batch_size
+    #true_kinases = [["PKN", "CAMK2", "CDK"]] * batch_size
+    num_correct = hit_at_n(a, true_kinases, n=N)
+
+    accuracy = num_correct / batch_size
+    accuracy
+
+def get_1hot_acc(labels, predictions, n: int = 1):
+    
+    num_predictions = len(predictions)
+    # FOR NOW, just use normal accuracy. is top (n) class(es) the (a) true kinase?
+    num_correct = 0
+    indexes = torch.topk(predictions, n).indices
+    for i, row in enumerate(labels):
+        
+        correct_kinase_idx = torch.argmax(row)
+
+        #kinases = dbptm_sites[kin]
+        #if indexes[i] in kinases:
+        if int(correct_kinase_idx) in list(indexes[i]):
+            num_correct += 1
+
+    return num_correct / num_predictions
 
 def train(model, device, train_dataloader, optimizer, epoch):
 
@@ -232,7 +298,7 @@ def train(model, device, train_dataloader, optimizer, epoch):
     scheduler = MultiStepLR(optimizer, milestones=[1,5], gamma=0.5)
     labels_tr = torch.Tensor()
 
-    for count, (site, label) in enumerate(train_dataloader):
+    for count, (site, label, metadata) in enumerate(train_dataloader):
     
         #print(f"kinase: {type(kinase)}")
         site = site.to(device)
@@ -242,20 +308,33 @@ def train(model, device, train_dataloader, optimizer, epoch):
         output = model(site)
         predictions_tr = torch.cat((predictions_tr, output.cpu()))
 
-        labels_tr = torch.cat((labels_tr, label.view(-1,1).cpu()), 0)
-        loss = loss_func(output, label.view(-1,1).float().to(device))
+        labels_tr = torch.cat((labels_tr, label.cpu()), 0)
+        loss = loss_func(output, label.float().to(device))
         loss.backward()
         optimizer.step()
 
+        # print("LABELS:")
+        # print(labels_tr)
+        # print("PREDICTION:")
+        # print(predictions_tr)
+        #acc_tr = get_1hot_acc(labels_tr, predictions_tr, n=1)
+        #print(f"acc: {acc_tr}")
+
     scheduler.step()
-    labels_tr = labels_tr.detach().numpy()
-    predictions_tr = predictions_tr.detach().numpy()
-    acc_tr = get_accuracy(labels_tr, predictions_tr , 0.5)
+    #labels_tr = labels_tr.detach().numpy()
+    #predictions_tr = predictions_tr.detach().numpy()
+
+    labels_tr = labels_tr
+    predictions_tr = predictions_tr
+
+    acc_tr = get_1hot_acc(labels_tr, predictions_tr, n=1)
+
     print(f'Epoch {epoch-1} / 30 [==============================] - train_loss : {loss} - train_accuracy : {acc_tr}')
 
 
 model = GCNN2(
-    num_features_pro=7 + 2,
+    features=["asa", "b_factor"],
+    use_residue_encoding="1-hot",
 )
 #model = model.float()
 model.to(device)
@@ -266,18 +345,25 @@ lr = 0.001 # hyperparam
 
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
+criterion = torch.nn.CrossEntropyLoss()
+
 for epoch in range(num_epochs):
     
     train(model, device, train_dataloader, optimizer, epoch+1)
     G, P = predict(model, device, test_dataloader)
 
-    loss = get_mse(G,P)
-    accuracy = get_accuracy(G,P, 0.5)
-    print(f'Epoch {epoch}/ {num_epochs} [==============================] - val_loss : {loss} - val_accuracy : {accuracy}')
+    try:
+        loss = criterion(G,P)
+    except:
+        loss = "BAD LOSS FUNCTION, UNKNOWN"
+
+    accuracy1 = get_1hot_acc(G,P, n=1)
+    accuracy3 = get_1hot_acc(G,P, n=3)
+    print(f'Epoch {epoch}/ {num_epochs} [==============================] - val_loss : {loss} - val_accuracy @ 1: {accuracy1} - val_accuracy @ 3: {accuracy3}')
 
 
-    if(accuracy > best_accuracy):
-        best_accuracy = accuracy
+    if(accuracy1 > best_accuracy):
+        best_accuracy = accuracy1
         best_acc_epoch = epoch
         torch.save(model.state_dict(), "../saved_models/GCN_MODEL2_SAVE.pth") #path to save the model
         print("Model")

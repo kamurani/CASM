@@ -96,7 +96,23 @@ class PhosphositeDataset(Dataset):
         
 
         examples: list = [] 
-        
+
+        # Filter sites according to file
+        fp = "./dbPTM_no_include"
+        count = 0 
+        with open(fp) as f:
+            for line in f:
+                acc, node = line.split()
+                pos = int(node.split(':')[-1])
+
+                if (acc, pos) in sites_dict:
+                    #print(f"Removing {(acc, pos)} ...")
+                    del sites_dict[(acc, pos)]
+                    count += 1
+                else:
+                    print(f"{(acc, pos)} not in sites_dict to begin with.")
+
+        print(f"Removed {count} sites from examples (node not in graph)")        
         # Filter sites 
         for (acc_id, pos), site in sites_dict.items():
     
@@ -116,7 +132,7 @@ class PhosphositeDataset(Dataset):
                     )
                     centre_node = site_pt.node_id.index(mod_rsd) # Will return value error if MOD_RSD is not in the graph
                 except:
-                    print(f"Excluding {acc_id} {mod_rsd} (node not in {fn} )")
+                    print(f"Excluding {acc_id} {mod_rsd}") # (node not in {fn} )")
                     continue # don't include in examples
             
 
@@ -165,6 +181,13 @@ class PhosphositeDataset(Dataset):
         # This may fail; e.g. 'off by 1' error in uniprot structure perhaps 
         centre_node = site.node_id.index(node) 
         site.node_index = torch.tensor([centre_node], dtype=torch.long)
+
+        # normalise to get RSA 
+        m = max(site.asa)
+        site.asa = [a / m for a in site.asa]
+        #site.asa = [site.asa]
+
+        site.b_factor = [b / 100 for b in site.b_factor]
 
         # Label 
         label = torch.tensor(self.examples[idx]['label']).type(torch.LongTensor)

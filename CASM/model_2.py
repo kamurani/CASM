@@ -19,18 +19,28 @@ class GCNN2(nn.Module):
     def __init__(
         self, 
         n_output: int = len(KINASE_FAMILY_DICT), 
-        num_features_pro: int = 1280, # Number of features is 1280 if using ESM per-residue embeddings.
+        num_features_pro: int = None, # Number of features is 1280 if using ESM per-residue embeddings.
         
         output_dim: int = 128, # Length after the first FC layer 
         dropout: float = 0.2,
+
+        features: list = [],
 
         embedding_method: str = "node",         # or "gep" i.e. global pooling
         use_residue_encoding: str = "meiler", #"1-hot",    # how to encode the residues (NOTE: assumes these features have already been created in the sample data)
         output_activation: str = "softmax",     # TODO: switch between this and individual sigmoid
     ):
+
+        if num_features_pro is None:
+            em_len = 20 if embedding_method == "1-hot" else 7 
+            num_features_pro = 20 + len(features)
+
+        self.features = features
+
         super(GCNN2, self).__init__()
 
         print('GCNN Loaded')
+        print(f"Using {use_residue_encoding} node embeddings ...")
 
         self.embedding_method = embedding_method.lower()
         self.use_residue_encoding = use_residue_encoding.lower()
@@ -75,8 +85,30 @@ class GCNN2(nn.Module):
         else:
             raise NotImplementedError(f"Residue encoding '{self.use_residue_encoding}' not implemented.")
 
-        features = [residue_encoding, phosphosite.asa, phosphosite.b_factor]   # , pro2_data.asa, pro2_data.phi, pro2_data.psi]
-                
+        # normalise 
+        #print(phosphosite.asa)
+        #asa = F.normalize(torch.tensor(phosphosite.asa[0]).float(), p=2, dim=0)
+
+        #print(asa)
+        
+        #b_factor = [[b / 100 for b in phosphosite.b_factor[0]]] # Get pLDDT as percentage
+
+        #b_factor = phosphosite.b_factor
+        #asa = phosphosite.asa
+
+
+        #self.features 
+
+        #features = [eval(f"phosphosite.{f}") for f in self.features]
+        features = []
+        if "asa" in self.features:
+            features.append(phosphosite.asa)
+        if "b_factor" in self.features:
+            features.append(phosphosite.b_factor)
+        
+        features.append(residue_encoding)
+        #features = [residue_encoding, asa, b_factor]   # , pro2_data.asa, pro2_data.phi, pro2_data.psi]
+        
         # Concatenate along 1st dim (dim=0) to get all nodes for all batches in one tensor
         for i, f in enumerate(features):
                 
@@ -88,7 +120,14 @@ class GCNN2(nn.Module):
 
         # Concatenate all features together
         x = torch.cat(features, dim=1)
+
+        print(x)
+        print(x.shape)
+        exit(1)
+
         x = x.float()
+
+        
 
         # First graph convolution layer 
         x = self.pro_conv(x, edge_index)
