@@ -121,9 +121,6 @@ class GCNN2(nn.Module):
         # Concatenate all features together
         x = torch.cat(features, dim=1)
 
-        print(x)
-        print(x.shape)
-        exit(1)
 
         x = x.float()
 
