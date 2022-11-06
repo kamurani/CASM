@@ -15,7 +15,7 @@ import numpy as np
 from load_dbPTM import KINASE_FAMILY_DICT, KINASE_TO_INDEX
 
 
-class GCNN(nn.Module):
+class GCNN2(nn.Module):
     def __init__(
         self, 
         n_output: int = len(KINASE_FAMILY_DICT), 
