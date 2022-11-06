@@ -28,7 +28,7 @@ class GCNN2(nn.Module):
         use_residue_encoding: str = "1-hot",    # how to encode the residues (NOTE: assumes these features have already been created in the sample data)
         output_activation: str = "softmax",     # TODO: switch between this and individual sigmoid
     ):
-        super(GCNN, self).__init__()
+        super(GCNN2, self).__init__()
 
         print('GCNN Loaded')
 
