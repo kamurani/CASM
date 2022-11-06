@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 import numpy as np
 
 
-from load_dbPTM import KINASE_FAMILY_DICT, KINASE_TO_INDEX
+from load_dbPTM import KINASE_FAMILY_DICT
 
 
 class GCNN2(nn.Module):
@@ -25,7 +25,7 @@ class GCNN2(nn.Module):
         dropout: float = 0.2,
 
         embedding_method: str = "node",         # or "gep" i.e. global pooling
-        use_residue_encoding: str = "1-hot",    # how to encode the residues (NOTE: assumes these features have already been created in the sample data)
+        use_residue_encoding: str = "meiler", #"1-hot",    # how to encode the residues (NOTE: assumes these features have already been created in the sample data)
         output_activation: str = "softmax",     # TODO: switch between this and individual sigmoid
     ):
         super(GCNN2, self).__init__()
@@ -54,7 +54,7 @@ class GCNN2(nn.Module):
         self.fc2 = nn.Linear(128, 64)
         self.out = nn.Linear(64, self.n_output)
 
-    def forward(self, phosphosite: Union[torch_geometric.data.Data, torch_geometric.data.DataBatch]):
+    def forward(self, phosphosite: Union[torch_geometric.data.Data, torch_geometric.data.Batch]):
 
         
         node_index  = phosphosite.node_index
@@ -124,7 +124,7 @@ class GCNN2(nn.Module):
         return out
         
 
-net = GCNN(
+net = GCNN2(
     num_features_pro=9, # 22, 
 )
 print(net)
