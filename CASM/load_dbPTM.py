@@ -34,6 +34,7 @@ KINASE_FAMILIES = [
 
 aa1to3 = {'A': 'ALA', 'C': 'CYS', 'D': 'ASP', 'E': 'GLU', 'F': 'PHE', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE', 'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'P': 'PRO', 'Q': 'GLN', 'R': 'ARG', 'S': 'SER', 'T': 'THR', 'V': 'VAL', 'W': 'TRP', 'Y': 'TYR'}
 
+verbose = True
 
 KINASE_FAMILY_DICT = dict(enumerate(KINASE_FAMILIES))
 
@@ -52,7 +53,14 @@ with open(entry_name_fp) as f:
         (entry_name, acc_id) = line.split()
         uniprot_entry2acc[entry_name] = acc_id
 
+"""
+Convert entry name to uniprot ID
+"""
+def get_acc_id(entry_name: str):
 
+    if entry_name in uniprot_entry2acc:
+        return uniprot_entry2acc[entry_name]
+    return None
 
 # Go through all files 
 count = {} 
@@ -78,7 +86,12 @@ for kinase in KINASE_FAMILIES:
             seq     = record.seq
             entry_name, pos = header.rsplit("_", 1) 
             
-             
+            acc_id = get_acc_id(entry_name)
+            if acc_id is None: 
+                if verbose:
+                    print(f"No Uniprot ID mapping from '{entry_name}'")
+                continue 
+
             res: str = seq[len(seq) // 2]   # middle character
             res = aa1to3[res]               # 3 letter code
             
