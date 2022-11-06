@@ -43,6 +43,15 @@ KINASE_TO_INDEX = {item:idx for idx, item in enumerate(KINASE_FAMILIES)}
 
 root_dir = "../../DATA/dbPTM/kinases/"
 
+# Get dict 
+uniprot_entry2acc = {}
+entry_name_fp = "../../DATA/dbPTM/uniprot_entry_names.tsv"
+with open(entry_name_fp) as f:
+    next(f)
+    for line in f:
+        (entry_name, acc_id) = line.split()
+        uniprot_entry2acc[entry_name] = acc_id
+
 
 
 # Go through all files 
@@ -92,8 +101,20 @@ for kinase in KINASE_FAMILIES:
             count[kinase][polarity] += 1
 
 
+def print_entry_names():
+
+    names = [entry_name for (entry_name, pos) in sites.keys()] 
+    names = list(set(names)) # only unique values (redundant)
+
+    for n in names:
+        print(n)
 
 
+
+for i in list(sites.items())[0:10]:
+    print(i)
+
+exit(1)
         #print(kinase, polarity, count[kinase][polarity], sep="\t")
 
 
