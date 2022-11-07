@@ -9,6 +9,8 @@ from torch_geometric.data import DataLoader
 import math
 import os
 
+
+
 #from CASM.load_training_data import dataset
 from CASM.model import GCNN, AttGNN
 
@@ -25,15 +27,21 @@ import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
 
+import numpy as np
+
 def main():
 
     device = torch.device("cuda:1") if torch.cuda.is_available() else torch.device("cpu")
 
     path = "../GCN.pth"
     path = "../saved_models/GCN_SAVE.pth"
+    path = "../saved_models/GCN_M1_NORMALISATION.pth"
 
     model = GCNN(
         num_features_pro=23,
+
+        # Use embeddings;
+        get_embedding=True,
     )   
     model.load_state_dict(torch.load(path))
 
@@ -64,6 +72,10 @@ def main():
 
     # Sorted by acc id order
     kin_ids = sorted(kin_ids)
+
+    
+ 
+
     # Mapping index to acc_id 
     kin_acc2idx = {val:key for key, val in enumerate(kin_ids)}
 
@@ -82,14 +94,41 @@ def main():
     #s = "O00429 S40"
     #sub, mod_rsd = s.split('_')
 
+    def threshold(x, val=0.5):
+        if x > val:
+            return 1
+        return 0 
 
+    from utils.residue import aa3to1, aa1to3
+    from load_psp import convert_mod_rsd
 
     rows = []
-    for (sub, mod_rsd) in site_ids[0:150]:
+    bin_rows = []
+
+    EM_LENGTH = 128#23
+    embeddings = np.empty((0, EM_LENGTH))
+    for i, (sub, mod_rsd) in enumerate(site_ids):
+        
+
+        #print(sub)
+        #print()
+
+        node = convert_mod_rsd(mod_rsd)
+
+        
+
         # Generate batch for one site, that has all kinases 
         site: Data = torch.load(os.path.join(processed_dir, f"SUB_{sub}_{mod_rsd}.pt"))
+
+        node_index = site.node_id.index(node)
+        
+        #for i in nodes:
+            
+
+        site.node_index = node_index # TODO
+
         kinases = []
-        for k in kin_ids:
+        for k in [kin_ids[2]]:#kin_ids:
             kinase: Data = torch.load(os.path.join(processed_dir, f"KIN_{k}.pt"))
             kinases.append(kinase)
 
@@ -112,18 +151,59 @@ def main():
         sites = sites.to(device)
 
         output = model(kinases, sites)
+        
+        # Loss tensor 
+        tr = output.detach()
+        ar: np.array = tr.numpy()
+        ar = ar.flatten()
+        
+        embeddings = np.append(embeddings, [ar], axis=0)
+        
+        continue 
 
         output = output.flatten().tolist()
 
         rows.append(output)
 
+
+        bin_out = [threshold(o) for o in output]
+        #print(bin_out)
+        bin_rows.append(bin_out)
+
+    np.save('embeddings_m1_fc1_relu_128.npy', embeddings) # 23 long embeddings
+    print(embeddings)
+    exit(1)
+    count = 0
+    for i, r in enumerate(rows):
+        if r[0] > 0.5:
+            print(r[0], site_ids[i])
+            count += 1
+
+
+        
+    print(f"count: {count}")
+    #print(sum(rows))
     #print()
+    exit(1)
     import plotly.express as px
     fig = px.imshow(
-        rows
+        bin_rows,
     )
+    fig.write_html("bin_plot.html")
 
-    fig.write_html("plot.html")
+    # Binary 
+    fig2 = px.imshow(
+        rows,
+    )
+    fig2.write_html("plot.html")
+
+    #with open('plots.html', 'a') as f:
+        #f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+
+    #    f.write(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+        #f.write(fig3.to_html(full_html=False, include_plotlyjs='cdn'))
+
+    #fig.write_html("plot.html")
 
     return 
 
