@@ -34,6 +34,14 @@ from CASM.kin_sub_pairs import get_atp_site_dict, KIN_ATP_COORDS_RMSD
 from CASM.subgraphs import get_motif_subgraph, get_kinase_subgraph
 from CASM.load_psp import convert_mod_rsd
 
+import random
+
+"""
+Normalisation functions for data
+"""
+def normalise_bond_angle(angles: list):
+    return [(i + 180) / 360 for i in angles]
+
 """
 Pairs two graphs together in a single ``Data`` instance.
 """
@@ -45,9 +53,231 @@ def pair_data(a: Data, b: Data) -> Data:
     return out
 
 """
+Calculates sequence embedding as node features 
+"""
+class SubstrateDatasetVec(Dataset):
+
+    def __init__(
+        self,
+        root,
+        name, 
+        pdb_codes: Optional[List[str]] = None,
+        uniprot_ids: Optional[List[str]] = None,
+        overwrite: bool = False,
+
+        graph_labels: Optional[List[torch.Tensor]] = None,
+        node_labels: Optional[List[torch.Tensor]] = None,
+        chain_selections: Optional[List[str]] = None,
+
+        graphein_config: ProteinGraphConfig = ProteinGraphConfig(),
+        graph_format_convertor: GraphFormatConvertor = GraphFormatConvertor(
+            src_format="nx", dst_format="pyg"
+        ),
+        graph_transformation_funcs: Optional[List[Callable]] = None,
+        pdb_transform: Optional[List[Callable]] = None,
+        transform: Optional[Callable] = None,
+        pre_transform: Optional[Callable] = None,
+        pre_filter: Optional[Callable] = None,
+        num_cores: int = 16,
+        af_version: int = 2,
+    ):
+        """Dataset class for protein graphs.
+
+        Dataset base class for creating graph datasets.
+        See `here <https://pytorch-geometric.readthedocs.io/en/latest/notes/
+        create_dataset.html>`__ for the accompanying tutorial.
+
+        :param root: Root directory where the dataset should be saved.
+        :type root: str
+        :param pdb_codes: List of PDB codes to download and parse from the PDB.
+            Defaults to ``None``.
+        :type pdb_codes: Optional[List[str]], optional
+        :param uniprot_ids: List of Uniprot IDs to download and parse from
+            Alphafold Database. Defaults to ``None``.
+        :type uniprot_ids: Optional[List[str]], optional
+        :param graph_label_map: Dictionary mapping PDB/Uniprot IDs to
+            graph-level labels. Defaults to ``None``.
+        :type graph_label_map: Optional[Dict[str, Tensor]], optional
+        :param node_label_map: Dictionary mapping PDB/Uniprot IDs to node-level
+            labels. Defaults to ``None``.
+        :type node_label_map: Optional[Dict[str, torch.Tensor]], optional
+        :param chain_selection_map: Dictionary mapping, defaults to ``None``.
+        :type chain_selection_map: Optional[Dict[str, List[str]]], optional
+        :param graphein_config: Protein graph construction config, defaults to
+            ``ProteinGraphConfig()``.
+        :type graphein_config: ProteinGraphConfig, optional
+        :param graph_format_convertor: Conversion handler for graphs, defaults
+            to ``GraphFormatConvertor(src_format="nx", dst_format="pyg")``.
+        :type graph_format_convertor: GraphFormatConvertor, optional
+        :param graph_transformation_funcs: List of functions that consume a
+            ``nx.Graph`` and return a ``nx.Graph``. Applied to graphs after
+            construction but before conversion to pyg. Defaults to ``None``.
+        :type graph_transformation_funcs: Optional[List[Callable]], optional
+        :param pdb_transform: List of functions that consume a list of paths to
+            the downloaded structures. This provides an entry point to apply
+            pre-processing from bioinformatics tools of your choosing. Defaults
+            to ``None``.
+        :type pdb_transform: Optional[List[Callable]], optional
+        :param transform: A function/transform that takes in a
+            ``torch_geometric.data.Data`` object and returns a transformed
+            version. The data object will be transformed before every access.
+            Defaults to ``None``.
+        :type transform: Optional[Callable], optional
+        :param pre_transform:  A function/transform that takes in an
+            ``torch_geometric.data.Data`` object and returns a transformed
+            version. The data object will be transformed before being saved to
+            disk. Defaults to ``None``.
+        :type pre_transform: Optional[Callable], optional
+        :param pre_filter:  A function that takes in a
+            ``torch_geometric.data.Data`` object and returns a boolean value,
+            indicating whether the data object should be included in the final
+            dataset. Optional, defaults to ``None``.
+        :type pre_filter: Optional[Callable], optional
+        :param num_cores: Number of cores to use for multiprocessing of graph
+            construction, defaults to ``16``.
+        :type num_cores: int, optional
+        :param af_version: Version of AlphaFoldDB structures to use,
+            defaults to ``2``.
+        :type af_version: int, optional
+        """
+
+
+        """""""""""""""""""""""""""""""""""""""""" 
+        self.name = name
+        self.df = df
+
+
+
+        """
+        Create ``data_list`` using dataframe 
+        """
+
+        # TODO: download all necessary kinases
+        # get list of all kinases (can't use unique as KIN_ACC_ID will have list of kinases)
+
+        self.substrates = list(df.SUB_ACC_ID.unique())
+        self.kinases = list(df.KIN_ACC_ID.explode().unique())
+        
+        self.kinase_metadata_dict = kinase_metadata_dict
+
+
+        # Generate pairs (structures) with labels
+        
+        
+
+        # have to download pdb files for self.structures; but have to create graphs separately for sub / kin
+        self.structures = self.substrates + self.kinases
+
+        self.pairs = [] 
+
+        # Turn dataframe into dict
+        df2: dict = dict([((sub, mod_rsd), (pos, neg)) for sub, mod_rsd, pos, neg in zip(df.SUB_ACC_ID, df.SUB_MOD_RSD, df.KIN_ACC_ID, df.NEG_KIN_ACC_ID) ])
+
+        # For each site
+        for (sub, mod_rsd), (pos, neg) in df2.items():
+            
+            # Iterate through positive examples
+            label = 1
+            for kin in pos:
+                pair = {
+                    "sub": sub,
+                    "mod_rsd": mod_rsd,
+                    "kin": kin,
+                    "label": label,     
+                }
+                self.pairs.append(pair)    
+            # Iterate through negative examples    
+            label = 0 
+            for kin in neg:     
+                pair = {
+                    "sub": sub,
+                    "mod_rsd": mod_rsd,
+                    "kin": kin,
+                    "label": label,     
+                }
+                self.pairs.append(pair)
+
+        
+        
+            
+        #print(self.pairs[0:10])
+
+        
+        self.data_list: List[Tuple[Data, Data]] = None
+
+        """
+        
+        """
+
+
+        self.pdb_codes = (
+            [pdb.lower() for pdb in pdb_codes]
+            if pdb_codes is not None
+            else None
+        )
+        self.uniprot_ids = (
+            [up.upper() for up in uniprot_ids]
+            if uniprot_ids is not None
+            else None
+        )
+
+        if self.pdb_codes and self.uniprot_ids:
+            self.structures = self.pdb_codes + self.uniprot_ids
+        elif self.pdb_codes:
+            self.structures = pdb_codes
+        elif self.uniprot_ids:
+            self.structures = uniprot_ids
+        self.af_version = af_version
+
+        # Labels & Chains
+
+        self.examples: Dict[int, str] = dict(enumerate(self.pairs))
+
+        """
+        Unnecessary stuff
+        """
+        if graph_labels is not None:
+            self.graph_label_map = dict(enumerate(graph_labels))
+        else:
+            self.graph_label_map = None
+        if node_labels is not None:
+            self.node_label_map = dict(enumerate(node_labels))
+        else:
+            self.node_label_map = None
+        if chain_selections is not None:
+            self.chain_selection_map = dict(enumerate(chain_selections))
+        else:
+            self.chain_selection_map = None
+
+        self.validate_input()
+        self.bad_pdbs: List[str] = []
+        self.bad_uniprot_ids: List[str] = []
+
+        # Configs
+        self.config = graphein_config
+        self.graph_format_convertor = graph_format_convertor
+        self.num_cores = num_cores
+        self.pdb_transform = pdb_transform
+        self.graph_transformation_funcs = graph_transformation_funcs
+        super().__init__(
+            root,
+            transform=transform,
+            pre_transform=pre_transform,
+            pre_filter=pre_filter,
+        )
+        self.config.pdb_dir = Path(self.raw_dir)
+
+
+
+
+"""
 TODO: handle errors (e.g. missing values for threshold checking in the dataframe)
 within this dataset init, instead of filtering ourselves before we pass the dataframe
 to this dataset class.
+"""
+
+"""
+TODO: make sure the positive and negative examples for the kinases all have structures in the directory
 """
 class KinaseSubstrateDataset(Dataset):
     def __init__(
@@ -499,11 +729,12 @@ class KinaseSubstrateDataset(Dataset):
         #updated_examples = {key:val for key, val in self.examples.items() if validate_example(val) }       
         updated_examples: list = [data for data in self.examples.values() if validate_example(data)]
 
-
+        print(f"Some examples of {len(updated_examples)}: ")
+        print(random.sample(updated_examples, 10))
 
         self.examples = dict(enumerate(updated_examples))
 
-        
+
 
         # check that all files exist
         for key, val in self.examples.items():
@@ -511,7 +742,7 @@ class KinaseSubstrateDataset(Dataset):
             assert os.path.exists(Path(self.processed_dir) / f"KIN_{val['kin']}.pt")
     
 
-        print(len(self.examples))
+        
         return 
 
         idx = 0
@@ -610,16 +841,38 @@ class KinaseSubstrateDataset(Dataset):
         kinase = torch.load(
                 os.path.join(self.processed_dir, f"KIN_{self.examples[idx]['kin']}.pt")
         )
-        #kinase = torch.tensor(kinase)
+        # NORMALISE DATA
+        kinase.psi = normalise_bond_angle(kinase.psi)
+        kinase.phi = normalise_bond_angle(kinase.phi)
+
+        m = max(kinase.asa)
+        kinase.asa = [a / m for a in kinase.asa]
+        
 
         site = torch.load(
                 os.path.join(self.processed_dir, f"SUB_{self.examples[idx]['sub']}_{mod_rsd}.pt")
         )
-        #site = torch.tensor(site)
-        label = torch.tensor(self.examples[idx]['label'])
+        # NORMALISE DATA
+        site.psi = normalise_bond_angle(site.psi)
+        site.phi = normalise_bond_angle(site.phi)
 
+        m = max(site.asa)
+        site.asa = [a / m for a in site.asa]
         
-        return kinase, site, mod_rsd, label  
+        # Get index of node_id to 
+        node: str = convert_mod_rsd(mod_rsd) 
+        centre_node = site.node_id.index(node)
+
+        # Save node_index in a mini-batchable way
+        site.node_index = torch.tensor([centre_node], dtype=torch.long)
+        #site = torch.tensor(site)
+
+        # Label
+        label = torch.tensor(self.examples[idx]['label']).type(torch.LongTensor)
+
+        # Metadata
+        metadata = (self.examples[idx]['kin'], self.examples[idx]['sub'], mod_rsd)
+        return kinase, site, metadata, label  
 
 
         """
