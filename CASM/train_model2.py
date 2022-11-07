@@ -203,19 +203,88 @@ dbptm_sites = get_sites()
 # TODO: validation data loader
 
 def predict(model, device, loader):
+    
     model.eval()
-    predictions = torch.Tensor()
+    predictions_t = torch.Tensor()
     labels = torch.Tensor()
+
+    count1 = 0
+    count3 = 0
+    total_num = 0
     with torch.no_grad():
         for site, label, metadata in loader:
+            
+            
+            
+            acc_id = metadata['acc_id']
+            mod_rsd = metadata['mod_rsd']
+
+            total_num += len(mod_rsd) # i.e. `batch_size`
+            
+            #print(f"Label: {label}")
+            #print(f"Metadata: {metadata}")
             site = site.to(device)
+
+
+
+            # print(int(torch.argmax(label)))
 
             #print(torch.Tensor.size(kin.x), torch.Tensor.size(sub.x))
             output = model(site)
-            predictions = torch.cat((predictions, output.cpu()), 0)
+
+            predictions_t = torch.cat((predictions_t, output.cpu()), 0)
             labels = torch.cat((labels, label.cpu()), 0)
 
-    return labels, predictions
+
+
+            n = 1
+            indexes = torch.topk(output, n).indices
+
+            
+            for i, row in enumerate(indexes):
+
+                acc = acc_id[i] 
+                pos = int(mod_rsd[i].split(':')[-1])
+                
+                if (acc, pos) not in dbptm_sites:
+                    print(f"{(acc, pos)} not in sites dict.")
+                    continue
+                
+                true_kinases = dbptm_sites[(acc, pos)]['pos'] 
+
+                for j in row: # Go through each of the top N classes 
+                    if KINASE_FAMILIES[int(j)] in true_kinases:
+                        count1 += 1
+                        break
+            
+            # REPEAT LOOP BUT FOR n=3
+            n = 3
+            indexes = torch.topk(output, n).indices
+
+            for i, row in enumerate(indexes):
+
+                acc = acc_id[i] 
+                pos = int(mod_rsd[i].split(':')[-1])
+                
+                if (acc, pos) not in dbptm_sites:
+                    print(f"{(acc, pos)} not in sites dict.")
+                    continue
+                
+                true_kinases = dbptm_sites[(acc, pos)]['pos'] 
+
+                for j in row: # Go through each of the top N classes 
+                    if KINASE_FAMILIES[int(j)] in true_kinases:
+                        count3 += 1
+                        break    
+
+            #print(f"count1: {count1} count3: {count3}")
+            
+
+            
+    acc_1 = count1 / total_num
+    acc_3 = count3 / total_num
+    #print(f"acc1: {acc_1} acc3: {acc_3}")
+    return acc_1, acc_3, predictions_t, labels
     #labels = labels.numpy()
     #predictions = predictions.numpy()
     #return labels.flatten(), predictions.flatten()
@@ -341,7 +410,7 @@ model.to(device)
 num_epochs = 150
 best_accuracy = 0
 lr = 0.001 # hyperparam
-#lr = 0.0005
+lr = 0.0005
 
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
@@ -350,23 +419,24 @@ criterion = torch.nn.CrossEntropyLoss()
 for epoch in range(num_epochs):
     
     train(model, device, train_dataloader, optimizer, epoch+1)
-    G, P = predict(model, device, test_dataloader)
-
+    accuracy1, acc3, predictions_t, labels = predict(model, device, test_dataloader)
+   
     try:
-        loss = criterion(G,P)
+        loss = criterion(predictions_t, labels)
     except:
         loss = "BAD LOSS FUNCTION, UNKNOWN"
 
-    accuracy1 = get_1hot_acc(G,P, n=1)
-    accuracy3 = get_1hot_acc(G,P, n=3)
-    print(f'Epoch {epoch}/ {num_epochs} [==============================] - val_loss : {loss} - val_accuracy @ 1: {accuracy1} - val_accuracy @ 3: {accuracy3}')
+    #accuracy1 = get_1hot_acc(G,P, n=1)
+    #accuracy3 = get_1hot_acc(G,P, n=3)
+    print(f'Epoch {epoch}/ {num_epochs} [==============================] - val_loss : {loss} - val_accuracy @ 1: {accuracy1} - val_accuracy @ 3: {acc3}')
 
+    # TODO: evaluate hit @ 1 / 3 by looking if ANY kinase (in dict) was predicted
 
     if(accuracy1 > best_accuracy):
         best_accuracy = accuracy1
         best_acc_epoch = epoch
         torch.save(model.state_dict(), "../saved_models/GCN_MODEL2_SAVE.pth") #path to save the model
-        print("Model")
+        print("Model saved")
     if(loss < min_loss):
         epochs_no_improve = 0
         min_loss = loss
