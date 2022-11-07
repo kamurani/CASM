@@ -9,14 +9,18 @@ from torch.optim.lr_scheduler import MultiStepLR
 
 import numpy as np
 
+
+
+
 class GCNN(nn.Module):
-    def __init__(self, n_output=1, num_features_pro=1024, output_dim=128, dropout=0.2):
+    def __init__(self, n_output=1, num_features_pro=1024, output_dim=128, dropout=0.2, get_embedding = False):
         super(GCNN, self).__init__()
 
         print('GCNN Loaded')
 
         # for protein 1
         self.n_output = n_output
+        self.get_embedding = get_embedding
         self.pro1_conv1 = GCNConv(num_features_pro, num_features_pro)
         self.pro1_fc1 = nn.Linear(num_features_pro, output_dim)
 
@@ -47,7 +51,13 @@ class GCNN(nn.Module):
                 p1 = torch.cat(features, dim=1)
                 print(p1)
         else:
-       
+                
+                #print(pro1_data.node_id)
+                
+                # Get node index for SITE
+                node_index = pro2_data.node_index
+                
+                
                 num_nodes = pro1_data.num_nodes
                 features = [pro1_data.amino_acid_one_hot, pro1_data.asa, pro1_data.phi, pro1_data.psi]
                 
@@ -71,8 +81,8 @@ class GCNN(nn.Module):
                 p1 = torch.cat(features, dim=1)
                 p1 = p1.float()
 
-        
-        
+
+                
                 
                 #features = [p1.amino_acid_one_hot, p1.asa, p1.phi, p1.psi]
 
@@ -103,6 +113,13 @@ class GCNN(nn.Module):
 
                 # get graph input for protein 2
                 pro2_edge_index, pro2_batch = pro2_data.edge_index, pro2_data.batch
+
+                # sub_node_ids = pro2_data.node_id
+                # print("node index:")
+                # print(node_index)
+                # print("node ids:")
+                # print(sub_node_ids)
+                # exit(1)
                 
                 num_nodes = pro2_data.num_nodes
                 features = [pro2_data.amino_acid_one_hot, pro2_data.asa, pro2_data.phi, pro2_data.psi]
@@ -129,7 +146,19 @@ class GCNN(nn.Module):
         x = self.relu(x)
         
 	# global pooling
-        x = gep(x, pro1_batch)   
+        # print("before pool: ")
+        # print(x.shape)
+        # print(x)
+        
+        x = gep(x, pro1_batch)
+        
+        # TODO: same for kinase? nearest node to ATP site?
+        #x = x[node_index]    
+        
+        # print("after pool: ")
+        # print(x.shape)
+        # print(x)
+        # exit(1)
 
         # flatten
         x = self.relu(self.pro1_fc1(x))
@@ -141,10 +170,18 @@ class GCNN(nn.Module):
         xt = self.relu(xt)
 
 	# global pooling
-        xt = gep(xt, pro2_batch)  
+        #xt = gep(xt, pro2_batch)  
+
+        xt = xt[node_index]
+
+        
 
         # flatten
         xt = self.relu(self.pro2_fc1(xt))
+        if self.get_embedding: 
+                
+                return xt
+
         xt = self.dropout(xt)
 
 
