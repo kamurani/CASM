@@ -164,6 +164,8 @@ class GCNN2_Double(nn.Module):
         self, 
         n_output: int = len(KINASE_FAMILY_DICT), 
         num_features_pro: int = None, # Number of features is 1280 if using ESM per-residue embeddings.
+
+
         
         output_dim: int = 128, # Length after the first FC layer 
         dropout: float = 0.2,
@@ -278,7 +280,7 @@ class GCNN2_Double(nn.Module):
 
         # Second graph convolution layer
         x = self.pro_conv2(x, edge_index)
-        x = self.relu()
+        x = self.relu(x)
 
         # Pooling
         if self.embedding_method in ["gep", "global"]:
