@@ -93,8 +93,26 @@ def load_kin_sub_list(
     
     return df
 
+def get_entire_df(kin_sub_dataset=KIN_SUB_DATASET):
+
+    df = load_kin_sub_list(kin_sub_dataset)
+    return df
+
+"""
+Get kinase name dict
+"""
+def get_kinase_name_dict():
+    
+    d = get_kinase_name_map(
+        filepath=KIN_TABLE,
+        from_name="UniprotID",
+    )
+    return d
 
 def get_filtered_dataset(
+
+    ignore_sites: List[Tuple[str, str]] = None,
+    ignore_kinases: List[str] = None,
     
     kin_organism: str = "human",
     sub_organism: str = "human",
@@ -126,8 +144,33 @@ def get_filtered_dataset(
     # Filter isoforms (not supported by AF)
     df = df[df.apply(lambda row: not ("-" in row["KIN_ACC_ID"] or "-" in row["SUB_ACC_ID"]), axis=1)]
 
+    # Filter by ``ignore_sites``
+    
+    if ignore_sites is not None:
+        
+        def filter_ignore_sites(acc, rsd): 
+            if (acc, rsd) in ignore_sites: 
+                #print(f"Excluding SITE {acc} {rsd}")
+                return False
+            return True
+        
+        original = len(df)
+        df = df[df.apply(lambda row: filter_ignore_sites(row['SUB_ACC_ID'], row['SUB_MOD_RSD']), axis=1)]
+        new_len = len(df)
+        print(f"Ignored {original - new_len} sites")
 
-
+    if ignore_kinases is not None:
+        count = 0
+        def filter_ignore_kinases(acc):
+            if acc in ignore_kinases:
+                #print(f"Excluding KINASE {acc}")
+                return False
+            return True
+        
+        original = len(df)
+        df = df[df.apply(lambda row: filter_ignore_kinases(row['KIN_ACC_ID']), axis=1)]
+        new_len = len(df)
+        print(f"Ignored {original - new_len} entries (kinases)")
     # Join PLDDT score 
     def get_filter_func(d: dict):
         return lambda row: d[row["SUB_ACC_ID"]][row["SUB_MOD_RSD"]]["plddt"] if (row["SUB_ACC_ID"] in d and row["SUB_MOD_RSD"] in d[row["SUB_ACC_ID"]]) else -1 #"UNKNOWN"
@@ -208,10 +251,14 @@ def get_filtered_dataset(
         output_type: str = "UniprotID",
         no_overlap: str = None, # Remove any kinases from the output that have ``Group`` in common with input kinases. 
 
+        balance: bool = True,
     ):
         furthest_kin = [] 
         if type(acc_id) == str:
-            acc_id = [acc_id]
+            acc_id: List[str] = [acc_id]
+
+        # only get 
+        length = len(acc_id)
 
         for i in acc_id: 
             
@@ -239,8 +286,12 @@ def get_filtered_dataset(
         # if we've filtered for overlapping families, then there DEFINITELY shouldn't be overlapping kinases!
         for k in acc_id: 
             assert k not in no_overlap_output, f"{k} which is in {classification} {d[k][classification]}, is in {sorted(furthest_kin)}"
-
+        
         output = [d[o][output_type] for o in no_overlap_output]
+
+        if balance:
+            end_idx = min(length, len(output))
+            output = output[0:end_idx]
         return output
         
         
@@ -265,7 +316,8 @@ def get_filtered_dataset(
 
 
     # Number of negative examples from kinome tree (before overlap computation)
-    N = 10
+    #N = 60
+    N = 15
 
     # TODO maybe try group here instead of family for overlap requirement
     df["NEG_KIN_ACC_ID"] = df.apply(lambda row: get_furthest_kinases(row['KIN_ACC_ID'], n=N, output_type="UniprotID", no_overlap="Family"), axis=1)
@@ -375,11 +427,7 @@ def main(
     kinase_table,
 ):
 
-    df = get_filtered_dataset()
-
-    print(df)
-    exit(1)
-    return
+    
 
     """
     Old main func:
