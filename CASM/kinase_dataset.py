@@ -288,6 +288,8 @@ class KinaseSubstrateDataset(Dataset):
         uniprot_ids: Optional[List[str]] = None,
         overwrite: bool = False,
 
+        all_neg: bool = False, # If true, we will use every kinase / substrate pair in our training set, and assume all unknowns are FALSE
+
         df: pd.DataFrame = None, 
 
         kinase_metadata_dict: dict = get_atp_site_dict(
@@ -377,6 +379,7 @@ class KinaseSubstrateDataset(Dataset):
         self.name = name
         self.df = df
 
+        self.all_neg = all_neg # If true, we create negative examples for every kinase / substrate pair
 
 
         """
@@ -405,34 +408,63 @@ class KinaseSubstrateDataset(Dataset):
         df2: dict = dict([((sub, mod_rsd), (pos, neg)) for sub, mod_rsd, pos, neg in zip(df.SUB_ACC_ID, df.SUB_MOD_RSD, df.KIN_ACC_ID, df.NEG_KIN_ACC_ID) ])
 
         # For each site
+        count = {
+            0: 0,
+            1: 0,
+        }
         for (sub, mod_rsd), (pos, neg) in df2.items():
             
-            # Iterate through positive examples
-            label = 1
-            for kin in pos:
-                pair = {
-                    "sub": sub,
-                    "mod_rsd": mod_rsd,
-                    "kin": kin,
-                    "label": label,     
-                }
-                self.pairs.append(pair)    
-            # Iterate through negative examples    
-            label = 0 
-            for kin in neg:     
-                pair = {
-                    "sub": sub,
-                    "mod_rsd": mod_rsd,
-                    "kin": kin,
-                    "label": label,     
-                }
-                self.pairs.append(pair)
+            if self.all_neg is True:
+                
+                label = 1
+                for kin in pos:
+                    pair = {
+                        "sub": sub,
+                        "mod_rsd": mod_rsd,
+                        "kin": kin,
+                        "label": label,     
+                    }
+                    self.pairs.append(pair)    
+                    count[label] += 1
+                # Too many if we pick all; so sample a few
+                kins = random.sample(self.kinases, 50)
+                for kin in kins:
+                    label = 1 if kin in pos else 0 
+                    pair = {
+                        "sub": sub,
+                        "mod_rsd": mod_rsd,
+                        "kin": kin,
+                        "label": label,     
+                    }
+                    self.pairs.append(pair)
+                    count[label] += 1
+            else:
+                # Iterate through positive examples
+                label = 1
+                for kin in pos:
+                    pair = {
+                        "sub": sub,
+                        "mod_rsd": mod_rsd,
+                        "kin": kin,
+                        "label": label,     
+                    }
+                    self.pairs.append(pair)    
+                    count[label] += 1
+                # Iterate through negative examples    
+                label = 0 
+                for kin in neg:     
+                    pair = {
+                        "sub": sub,
+                        "mod_rsd": mod_rsd,
+                        "kin": kin,
+                        "label": label,     
+                    }
+                    self.pairs.append(pair)
+                    count[label] += 1
 
         
         
-            
-        #print(self.pairs[0:10])
-
+        
         
         self.data_list: List[Tuple[Data, Data]] = None
 
@@ -461,8 +493,16 @@ class KinaseSubstrateDataset(Dataset):
         self.af_version = af_version
 
         # Labels & Chains
+        length = len(self.pairs)
+        print("length", length)
+        print(f"Counts: {count[1]} POS {count[0]} NEG")
+        print(f"{count[1]/ length:.3f}:{count[0]/length:.3f}  POS:NEG")
+        print(random.sample(self.pairs, 5))
+        #print(self.pairs[0:10])
+        #exit(1)
 
         self.examples: Dict[int, str] = dict(enumerate(self.pairs))
+        
 
         """
         Unnecessary stuff
@@ -858,6 +898,10 @@ class KinaseSubstrateDataset(Dataset):
 
         m = max(site.asa)
         site.asa = [a / m for a in site.asa]
+
+        # Normalise MEILER EMBEDDINGS
+        print("here.")
+        exit(1)
         
         # Get index of node_id to 
         node: str = convert_mod_rsd(mod_rsd) 

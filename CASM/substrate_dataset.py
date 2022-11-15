@@ -48,12 +48,26 @@ def get_1hot_kinase(k: str):
     idx = KINASE_FAMILY_TO_INDEX[k]
     return F.one_hot(torch.tensor(idx), num_classes=NUM_KINASE_FAMILIES)
 
+
+
+
+
 """
-Convert positive examples into 1-hot encodings 
+Convert positive examples into multihot encodings 
 """
-def convert_kinase_list_1hot():
-    pass 
-    # TODO
+def get_multihot_kinase(kinases: list):
+    
+    #kinases = ["CDK", "CK2", "DYRK"]
+
+    length = len(KINASE_FAMILIES)
+    multihot = [0] * length
+    for i in range(length):
+        if KINASE_FAMILIES[i] in kinases:
+            multihot[i] = 1 
+        else:
+            multihot[i] = 0
+
+    return torch.tensor(multihot)
 
 """
 NOTE: assumes all graphs are already loaded (use ProteinGraphDataset to do this beforehand)
@@ -74,9 +88,12 @@ class PhosphositeDataset(Dataset):
         sites_dict: dict = get_sites() 
         self.name = name 
         self.label_encoding = label_encoding
+
         if self.label_encoding in ['1-hot', 'one-hot']: 
             #TODO
             pass 
+
+
 
         # NOTE: WE DO NOT PROCESS HERE; ASSUMES ALL NECESSARY .pt FILES ARE IN /processed !!!
         self.substrates = list(set([
@@ -135,22 +152,41 @@ class PhosphositeDataset(Dataset):
                     print(f"Excluding {acc_id} {mod_rsd}") # (node not in {fn} )")
                     continue # don't include in examples
             
+            if self.label_encoding == "1-hot":
+                kinase_families = site['pos']
+                for k in kinase_families:
+                    
+                    #print(f"family: {k}")
 
-            kinase_families = site['pos']
-            for k in kinase_families:
-                
-                #print(f"family: {k}")
+                    
+                    label = get_1hot_kinase(k)
+                    data = {
+                        "acc_id": acc_id, 
+                        "mod_rsd": mod_rsd,
+                        "label": label,
+                        "kin": k,
+                    }
 
+                    examples.append(data)
                 
-                label = get_1hot_kinase(k)
+            elif self.label_encoding in ["multilabel", "multi-hot"]:
+
+                kinase_families = site['pos']
+
+                label = get_multihot_kinase(kinase_families)
                 data = {
-                    "acc_id": acc_id, 
-                    "mod_rsd": mod_rsd,
-                    "label": label,
-                    "kin": k,
-                }
+                        "acc_id": acc_id, 
+                        "mod_rsd": mod_rsd,
+                        "label": label,
+                        "kin": kinase_families,
+                    }
 
                 examples.append(data)
+
+                # make multi-hot
+
+            else:
+                raise NotImplementedError(f"label encoding '{self.label_encoding}'")
 
         # DEBUG: print random sample 
         # sample = random.sample(examples, 10)
@@ -187,8 +223,14 @@ class PhosphositeDataset(Dataset):
         site.asa = [a / m for a in site.asa]
         #site.asa = [site.asa]
 
+
+
         site.b_factor = [b / 100 for b in site.b_factor]
 
+        MEILER_MAX = 10.74
+        MEILER_MIN = -1.01
+        site.meiler = [(m - MEILER_MIN) / MEILER_MAX for m in site.meiler]
+    
         # Label 
         label = torch.tensor(self.examples[idx]['label']).type(torch.LongTensor)
 
